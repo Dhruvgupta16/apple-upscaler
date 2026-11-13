@@ -335,6 +335,8 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
             self.active_index = index
             self.cached_media_path = ""
             self.cached_ts_str = ""
+            self.cached_source_file = ""
+            self.cached_ai_scaled_file = ""
             return self.queue[index]
         return None
 
@@ -660,11 +662,11 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
             chain.append(f"noise=alls={int(grain * 25)}:allf=t+u")
 
         # RETRO CRT SCANLINES & VHS TAPE EFFECT
-        if crt_scanlines and not for_preview:
+        if crt_scanlines:
             chain.append(f"drawgrid=width=10000:height=4:thickness=1:color=black@{crt_intensity:.2f}")
             
-        if vhs_mode and not for_preview:
-            s_val = int(vhs_chroma)
+        if vhs_mode:
+            s_val = max(1, int(vhs_chroma))
             chain.append(f"rgbashift=rh={-s_val}:bh={s_val}:rv=1:bv=-1")
 
         lut_file = None
@@ -1386,10 +1388,21 @@ body {
   background: radial-gradient(circle at center, #11131c 0%, #06070a 100%);
 }
 
-.viewmode-pill {
+.viewport-top-controls {
   position: absolute;
-  top: 18px;
+  top: 14px;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
   z-index: 30;
+  pointer-events: none;
+}
+.viewmode-pill {
+  position: relative;
+  pointer-events: auto;
   background: rgba(16, 18, 26, 0.92);
   backdrop-filter: blur(16px);
   border: 1px solid var(--border-bright);
@@ -1422,6 +1435,8 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  min-width: 360px;
+  min-height: 220px;
   max-width: 100%;
   max-height: calc(100vh - 180px);
   border-radius: var(--radius-lg);
@@ -1436,9 +1451,9 @@ body {
   transform: scale(1.6);
 }
 .canvas-bounds.crt-curved {
-  transform: perspective(700px) scale(0.96);
+  transform: perspective(700px) scale(0.96) !important;
   border-radius: 36px !important;
-  box-shadow: inset 0 0 90px rgba(0,0,0,0.85), 0 0 40px rgba(0,0,0,0.95);
+  box-shadow: inset 0 0 100px rgba(0,0,0,0.9), 0 0 50px rgba(0,0,0,0.95), 0 0 120px rgba(82, 70, 234, 0.15) !important;
 }
 
 img:not([src]), img[src=""], img[src="#"] {
@@ -2296,6 +2311,223 @@ img:not([src]), img[src=""], img[src="#"] {
   transition: all 0.3s var(--ease-fluid);
 }
 .toast-msg.show { transform: translateY(0); opacity: 1; }
+
+/* UNDO / REDO BUTTONS DISABLED STATE */
+.btn-action:disabled {
+  opacity: 0.38 !important;
+  cursor: not-allowed !important;
+  pointer-events: none !important;
+}
+
+/* 1-CLICK STARTER PRESETS RIBBON */
+.starter-presets-bar {
+  position: relative;
+  top: 0;
+  pointer-events: auto;
+  z-index: 28;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(14, 16, 24, 0.94);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--border-bright);
+  padding: 4px 8px;
+  border-radius: var(--radius-pill);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.6);
+}
+.starter-presets-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  color: var(--text-dim);
+  padding-left: 6px;
+  padding-right: 4px;
+}
+.starter-chip {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid transparent;
+  color: var(--text-sub);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.18s var(--ease-fluid);
+  white-space: nowrap;
+}
+.starter-chip:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.15);
+  transform: translateY(-1px);
+}
+.starter-chip.active {
+  background: var(--accent-primary);
+  color: #ffffff;
+  box-shadow: 0 2px 10px rgba(82, 70, 234, 0.45);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+/* AUTHENTIC RETRO CRT SIMULATION */
+.crt-overlay {
+  position: absolute;
+  top: 0; left: 0; width: 100%; height: 100%;
+  pointer-events: none;
+  z-index: 22;
+  display: none;
+  background: 
+    linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.42) 50%),
+    linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.04), rgba(0, 0, 255, 0.06));
+  background-size: 100% 3px, 3px 100%;
+  box-shadow: inset 0 0 100px rgba(0,0,0,0.75);
+  animation: crtFlicker 0.15s infinite;
+}
+@keyframes crtFlicker {
+  0% { opacity: 0.96; }
+  50% { opacity: 1.0; }
+  100% { opacity: 0.97; }
+}
+
+/* CRT CURVED TUBE GLASS */
+.canvas-bounds.crt-curved {
+  transform: perspective(700px) scale(0.96) !important;
+  border-radius: 36px !important;
+  box-shadow: inset 0 0 100px rgba(0,0,0,0.9), 0 0 50px rgba(0,0,0,0.95), 0 0 120px rgba(82, 70, 234, 0.15) !important;
+}
+
+/* VHS ANALOG TAPE EMULATION */
+.layer-after.vhs-mode-active {
+  filter: drop-shadow(-2.5px 0 0 rgba(255, 20, 100, 0.6)) drop-shadow(2.5px 0 0 rgba(0, 220, 255, 0.6)) contrast(1.08) saturate(1.22) !important;
+  animation: vhsTapeJitter 0.22s infinite alternate ease-in-out;
+}
+@keyframes vhsTapeJitter {
+  0% { transform: translate(0, 0); }
+  25% { transform: translate(-0.6px, 0.2px); }
+  50% { transform: translate(0.5px, -0.2px); }
+  75% { transform: translate(-0.4px, 0.1px); }
+  100% { transform: translate(0.3px, -0.1px); }
+}
+
+/* VHS HEAD TRACKING NOISE BAR */
+.vhs-tracking-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 12px;
+  background: repeating-linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.15) 0px,
+    rgba(255, 255, 255, 0.4) 3px,
+    transparent 6px,
+    rgba(200, 200, 200, 0.25) 9px,
+    transparent 14px
+  );
+  filter: blur(0.5px);
+  opacity: 0.75;
+  pointer-events: none;
+  z-index: 23;
+  animation: vhsTracking 0.08s infinite linear;
+}
+@keyframes vhsTracking {
+  0% { transform: translateY(0); opacity: 0.6; }
+  50% { transform: translateY(-1px); opacity: 0.85; }
+  100% { transform: translateY(1px); opacity: 0.7; }
+}
+
+/* WORKFLOW TOGGLE (SIMPLE BEGINNER VS PRO STUDIO) */
+.workflow-toggle-bar {
+  padding: 10px 14px;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.workflow-segmented {
+  display: flex;
+  background: var(--bg-panel);
+  padding: 3px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-subtle);
+  gap: 3px;
+}
+.wf-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: transparent;
+  border: none;
+  color: var(--text-sub);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 7px 10px;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition: all 0.2s var(--ease-fluid);
+}
+.wf-btn:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.04);
+}
+.wf-btn.active {
+  background: var(--accent-primary);
+  color: #ffffff;
+  box-shadow: 0 2px 10px rgba(82, 70, 234, 0.4);
+}
+
+/* SIMPLE WORKFLOW STYLES */
+.simple-workflow-panel {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.simple-step-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--accent-cyan);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.simple-style-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin-top: 6px;
+}
+.simple-style-card {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: all 0.18s var(--ease-fluid);
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.simple-style-card:hover {
+  border-color: var(--accent-primary);
+  transform: translateY(-1px);
+  background: var(--bg-elevated);
+}
+.simple-style-card.active {
+  border-color: var(--accent-primary);
+  background: rgba(82, 70, 234, 0.14);
+  box-shadow: 0 0 16px rgba(82, 70, 234, 0.3);
+}
+.simple-card-icon { font-size: 18px; }
+.simple-card-name { font-size: 12px; font-weight: 700; color: #ffffff; }
+.simple-card-hint { font-size: 10px; color: var(--text-dim); line-height: 1.25; }
 </style>
 </head>
 <body>
@@ -2346,6 +2578,22 @@ img:not([src]), img[src=""], img[src="#"] {
       </div>
 
       <div class="topbar-actions">
+        <!-- UNDO / REDO CONTROLS -->
+        <button class="btn-action" id="btnUndo" onclick="undo()" title="Undo last adjustment (Ctrl+Z)" disabled>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="1 4 1 10 7 10"></polyline>
+            <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+          </svg>
+          Undo
+        </button>
+        <button class="btn-action" id="btnRedo" onclick="redo()" title="Redo last adjustment (Ctrl+Y)" disabled>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="23 4 23 10 17 10"></polyline>
+            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+          </svg>
+          Redo
+        </button>
+
         <!-- SUGGEST ENHANCEMENTS VISUAL AUDITION -->
         <button class="btn-action suggest" onclick="openAuditionModal()" title="See 6 AI remaster treatments on this frame">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -2395,12 +2643,39 @@ img:not([src]), img[src=""], img[src="#"] {
     <!-- VIEWPORT CINEMA -->
     <div class="viewport-area" id="viewportArea">
       
-      <!-- MODE PILL -->
-      <div class="viewmode-pill" id="viewModePill" style="display:none;">
-        <button class="tab-pill active" id="tabSplit" onclick="setViewMode('split')">Split Curtain</button>
-        <button class="tab-pill" id="tabOriginal" onclick="setViewMode('original')">Source</button>
-        <button class="tab-pill" id="tabRemaster" onclick="setViewMode('remaster')">Remastered</button>
-        <button class="tab-pill" id="tabABCompare" onclick="setViewMode('ab_compare')">A/B Scaler Compare</button>
+      <!-- TOP VIEWPORT CONTROLS (MODE & 1-CLICK STARTER PRESETS) -->
+      <div class="viewport-top-controls" id="viewportTopControls">
+        <div class="viewmode-pill" id="viewModePill" style="display:none;">
+          <button class="tab-pill active" id="tabSplit" onclick="setViewMode('split')">Split Curtain</button>
+          <button class="tab-pill" id="tabOriginal" onclick="setViewMode('original')">Source</button>
+          <button class="tab-pill" id="tabRemaster" onclick="setViewMode('remaster')">Remastered</button>
+          <button class="tab-pill" id="tabABCompare" onclick="setViewMode('ab_compare')">A/B Scaler Compare</button>
+        </div>
+
+        <div class="starter-presets-bar" id="starterPresetsBar" style="display:none;">
+          <span class="starter-presets-label">STARTER:</span>
+          <button class="starter-chip active" id="chipAiRemaster" onclick="quickApplyPreset('ai_remaster')" title="Real-ESRGAN AI Upscale + CAS Linework + Dynamic Contrast">
+            <span class="chip-icon">🌟</span> AI 4K Remaster
+          </button>
+          <button class="starter-chip" id="chipVibrantCel" onclick="quickApplyPreset('vibrant_cel')" title="Rich 90s Cel Color + Deep Black Restoration">
+            <span class="chip-icon">🎨</span> Vibrant Cel
+          </button>
+          <button class="starter-chip" id="chipRetroCrt" onclick="quickApplyPreset('retro_crt')" title="Sony Trinitron CRT Tube + Phosphor Scanlines + Glass Curvature">
+            <span class="chip-icon">📺</span> 90s CRT TV
+          </button>
+          <button class="starter-chip" id="chipVintageVhs" onclick="quickApplyPreset('vintage_vhs')" title="Analog Tape Tracking Glitch + RGB Prism Shift + Dialogue EQ">
+            <span class="chip-icon">📼</span> Vintage VHS
+          </button>
+          <button class="starter-chip" id="chipFilm35mm" onclick="quickApplyPreset('film_35mm')" title="Warm Film Stock + Natural Halation + Subtle Grain">
+            <span class="chip-icon">🎬</span> 35mm Film
+          </button>
+          <button class="starter-chip" id="chipStudioClean" onclick="quickApplyPreset('studio_clean')" title="16-Bit Debanding + Noise Floor Clean + Crisp Ink">
+            <span class="chip-icon">🧼</span> Studio Clean
+          </button>
+          <button class="starter-chip" id="chipNeutralFlat" onclick="quickApplyPreset('neutral_flat')" title="Untouched Flat Source Baseline">
+            <span class="chip-icon">⚖️</span> Flat
+          </button>
+        </div>
       </div>
 
       <!-- LOADER -->
@@ -2410,11 +2685,13 @@ img:not([src]), img[src=""], img[src="#"] {
       </div>
 
       <!-- CANVAS BOUNDS -->
-      <div class="canvas-bounds" id="canvasBounds" style="display:none;">
+      <div class="canvas-bounds" id="canvasBounds" style="display:none; visibility:hidden; opacity:0;">
         <img class="layer-before" id="imgBefore" style="display:none;" onload="this.style.display='block'; onFrameLoaded();" onerror="this.style.display='none';" />
         
         <div class="layer-after-clip" id="afterClip">
           <img class="layer-after" id="imgAfter" style="display:none;" onload="this.style.display='block';" onerror="this.style.display='none';" />
+          <!-- VHS TRACKING GLITCH BAR (REALISTIC ANALOG OVERLAY) -->
+          <div class="vhs-tracking-bar" id="vhsTrackingBar" style="display:none;"></div>
         </div>
 
         <!-- CRT OVERLAY -->
@@ -2502,8 +2779,148 @@ img:not([src]), img[src=""], img[src="#"] {
   <!-- ================= RIGHT: STUDIO SIDEBAR ================= -->
   <aside class="sidebar-panel">
     
-    <!-- TABS -->
-    <nav class="studio-tabs">
+    <!-- WORKFLOW MODE TOGGLE: BEGINNER SIMPLE VS PRO STUDIO -->
+    <div class="workflow-toggle-bar">
+      <div class="workflow-segmented">
+        <button class="wf-btn active" id="btnModeSimple" onclick="switchWorkflowMode('simple')">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+          Simple Mode (Beginners)
+        </button>
+        <button class="wf-btn" id="btnModePro" onclick="switchWorkflowMode('pro')">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+          Pro Studio (DaVinci)
+        </button>
+      </div>
+    </div>
+
+    <!-- ================= SIMPLE / BEGINNER WORKFLOW PANEL ================= -->
+    <div class="simple-workflow-panel" id="simpleWorkflowPanel">
+      
+      <!-- Card 1: Active Media -->
+      <div class="studio-card">
+        <div class="card-head">
+          <span class="card-title">1. Loaded Media</span>
+          <span class="lbl-nav-counter" id="lblSimpleNavCounter">--</span>
+        </div>
+        <div class="media-name" id="lblSimpleVideoName">No media loaded</div>
+        <div class="action-grid-2" style="margin-top: 8px;">
+          <button class="btn-subtle" onclick="triggerAddFiles()">+ Add Photos / Videos</button>
+          <button class="btn-subtle" onclick="triggerAddFolder()">+ Add Folder</button>
+        </div>
+      </div>
+
+      <!-- Card 2: 1-Click Remaster Styles -->
+      <div class="studio-card">
+        <div class="card-head">
+          <span class="card-title">2. Choose Remaster Style</span>
+          <span style="font-size: 10px; color: var(--accent-cyan); font-weight: 700;">1-CLICK MAGIC</span>
+        </div>
+        <div class="simple-style-grid">
+          <div class="simple-style-card active" id="cardStyleAiRemaster" onclick="applySimpleStyle('ai_remaster')">
+            <span class="simple-card-icon">🌟</span>
+            <span class="simple-card-name">AI 4K Remaster</span>
+            <span class="simple-card-hint">Neural AI redraw, sharp lines, rich contrast</span>
+          </div>
+          <div class="simple-style-card" id="cardStyleVibrantCel" onclick="applySimpleStyle('vibrant_cel')">
+            <span class="simple-card-icon">🎨</span>
+            <span class="simple-card-name">Vibrant Cel</span>
+            <span class="simple-card-hint">Deep blacks, punchy 90s anime cel saturation</span>
+          </div>
+          <div class="simple-style-card" id="cardStyleRetroCrt" onclick="applySimpleStyle('retro_crt')">
+            <span class="simple-card-icon">📺</span>
+            <span class="simple-card-name">90s CRT TV</span>
+            <span class="simple-card-hint">Phosphor scanlines, curved tube, warm bloom</span>
+          </div>
+          <div class="simple-style-card" id="cardStyleVintageVhs" onclick="applySimpleStyle('vintage_vhs')">
+            <span class="simple-card-icon">📼</span>
+            <span class="simple-card-name">Vintage VHS</span>
+            <span class="simple-card-hint">Analog tracking glitch, RGB split, tape hiss EQ</span>
+          </div>
+          <div class="simple-style-card" id="cardStyleFilm35mm" onclick="applySimpleStyle('film_35mm')">
+            <span class="simple-card-icon">🎬</span>
+            <span class="simple-card-name">35mm Film</span>
+            <span class="simple-card-hint">Theatrical film stock warmth & soft halation</span>
+          </div>
+          <div class="simple-style-card" id="cardStyleStudioClean" onclick="applySimpleStyle('studio_clean')">
+            <span class="simple-card-icon">🧼</span>
+            <span class="simple-card-name">Clean & Deband</span>
+            <span class="simple-card-hint">Cleans noise, color banding, and pixel artifacts</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 3: Easy Fine-Tuning (4 Simple Plain-English Sliders) -->
+      <div class="studio-card">
+        <div class="card-head">
+          <span class="card-title">3. Easy Adjustments</span>
+          <button class="btn-reset-link" onclick="resetSlidersToDefault()">Reset Defaults</button>
+        </div>
+
+        <div class="slider-group">
+          <!-- Slider 1: Detail & Crispness -->
+          <div class="slider-row">
+            <div class="slider-meta">
+              <span>🔍 Detail & Linework Crispness</span>
+              <span class="slider-val" id="valSimpleSharp">80%</span>
+            </div>
+            <input type="range" class="slider-bar" id="slSimpleSharp" min="0" max="100" value="80"
+                   oninput="onSimpleSliderChange('sharp', this.value)">
+          </div>
+
+          <!-- Slider 2: Color Vibrancy -->
+          <div class="slider-row">
+            <div class="slider-meta">
+              <span>🌈 Cel Color Vibrancy</span>
+              <span class="slider-val" id="valSimpleSat">126%</span>
+            </div>
+            <input type="range" class="slider-bar" id="slSimpleSat" min="50" max="180" value="126"
+                   oninput="onSimpleSliderChange('sat', this.value)">
+          </div>
+
+          <!-- Slider 3: Shadow Brightness -->
+          <div class="slider-row">
+            <div class="slider-meta">
+              <span>💡 Shadow De-Fog & Brightness</span>
+              <span class="slider-val" id="valSimpleBright">Normal</span>
+            </div>
+            <input type="range" class="slider-bar" id="slSimpleBright" min="-50" max="50" value="0"
+                   oninput="onSimpleSliderChange('bright', this.value)">
+          </div>
+
+          <!-- Slider 4: Retro Vintage Intensity -->
+          <div class="slider-row">
+            <div class="slider-meta">
+              <span>📼 Retro CRT & VHS Intensity</span>
+              <span class="slider-val" id="valSimpleRetro">Off</span>
+            </div>
+            <input type="range" class="slider-bar" id="slSimpleRetro" min="0" max="100" value="0"
+                   oninput="onSimpleSliderChange('retro', this.value)">
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 4: Quick Export -->
+      <div class="studio-card">
+        <div class="card-head">
+          <span class="card-title">4. Quick Export</span>
+          <span style="font-size: 10px; color: var(--accent-emerald); font-weight: 700;">GPU ACCELERATED</span>
+        </div>
+        
+        <div class="segmented-bar" style="margin-bottom: 10px;">
+          <button class="seg-btn active" onclick="setResolutionMode('1080p', this)">1080p Full HD</button>
+          <button class="seg-btn" onclick="setResolutionMode('4K', this)">4K Ultra HD</button>
+          <button class="seg-btn" onclick="setResolutionMode('Native', this)">Source Match</button>
+        </div>
+
+        <button class="btn-primary-export" id="btnSimpleExport" onclick="startExportProcess()">
+          <span id="lblSimpleExportBtn">🚀 Export Remastered Media</span>
+        </button>
+      </div>
+
+    </div>
+
+    <!-- TABS (PRO STUDIO) -->
+    <nav class="studio-tabs" style="display:none;">
       <button class="studio-tab-btn active" onclick="switchSidebarTab('tabColor', this)">Color & Wheels</button>
       <button class="studio-tab-btn" onclick="switchSidebarTab('tabRetroCRT', this)">Retro CRT/VHS</button>
       <button class="studio-tab-btn" onclick="switchSidebarTab('tabAIUpscale', this)">AI Upscaling</button>
@@ -3124,6 +3541,8 @@ let state = {
   activeIndex: -1,
   currentSec: 0,
   curtainPct: 50,
+  workflowMode: 'simple',
+  activeProTab: 'tabColor',
   settings: {
     contrast: 1.140,
     gamma: 0.880,
@@ -3175,8 +3594,243 @@ let state = {
 };
 
 // =========================================================================
+// UNDO / REDO HISTORY ENGINE (CTRL+Z / CTRL+Y)
+// =========================================================================
+let historyUndoStack = [];
+let historyRedoStack = [];
+
+function getSettingsSnapshot() {
+  return JSON.parse(JSON.stringify(state.settings));
+}
+
+function pushHistory(desc) {
+  historyUndoStack.push({
+    desc: desc || "Adjustment",
+    settings: getSettingsSnapshot()
+  });
+  if (historyUndoStack.length > 50) historyUndoStack.shift();
+  historyRedoStack = [];
+  updateUndoRedoButtons();
+}
+
+function updateUndoRedoButtons() {
+  const btnU = document.getElementById('btnUndo');
+  const btnR = document.getElementById('btnRedo');
+  if (btnU) btnU.disabled = (historyUndoStack.length === 0);
+  if (btnR) btnR.disabled = (historyRedoStack.length === 0);
+}
+
+function undo() {
+  if (historyUndoStack.length === 0) {
+    showToast("Nothing to undo");
+    return;
+  }
+  historyRedoStack.push({
+    desc: "Redo",
+    settings: getSettingsSnapshot()
+  });
+  const prev = historyUndoStack.pop();
+  for (let k in prev.settings) state.settings[k] = prev.settings[k];
+  syncAllInputsFromSettings();
+  updateLiveGPUGrade();
+  refreshFrame();
+  updateUndoRedoButtons();
+  showToast(`↩️ Undid: ${prev.desc}`);
+}
+
+function redo() {
+  if (historyRedoStack.length === 0) {
+    showToast("Nothing to redo");
+    return;
+  }
+  historyUndoStack.push({
+    desc: "Undo",
+    settings: getSettingsSnapshot()
+  });
+  const nxt = historyRedoStack.pop();
+  for (let k in nxt.settings) state.settings[k] = nxt.settings[k];
+  syncAllInputsFromSettings();
+  updateLiveGPUGrade();
+  refreshFrame();
+  updateUndoRedoButtons();
+  showToast(`↪️ Redid: ${nxt.desc}`);
+}
+
+// =========================================================================
+// SYNC UI INPUTS FROM STATE SETTINGS
+// =========================================================================
+function syncAllInputsFromSettings() {
+  const s = state.settings;
+  const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+  const setText = (id, t) => { const el = document.getElementById(id); if (el) el.innerText = t; };
+  const setChk = (id, c) => { const el = document.getElementById(id); if (el) el.checked = !!c; };
+
+  setVal('slContrast', s.contrast);
+  setText('valContrast', s.contrast.toFixed(2));
+  setVal('slSaturation', s.saturation);
+  setText('valSaturation', s.saturation.toFixed(2));
+  setVal('slGamma', s.gamma);
+  setText('valGamma', s.gamma.toFixed(2));
+  setVal('slBrightness', s.brightness);
+  setText('valBrightness', s.brightness.toFixed(3));
+  setVal('slExposure', s.exposure);
+  setText('valExposure', `${s.exposure >= 0 ? '+' : ''}${s.exposure.toFixed(2)} EV`);
+  setVal('slSharpness', s.sharpness);
+  setText('valSharpness', s.sharpness.toFixed(2));
+  setVal('slTemp', s.temp);
+  setText('valTemp', `${s.temp > 0 ? '+' : ''}${s.temp}`);
+  setVal('slTint', s.tint);
+  setText('valTint', `${s.tint > 0 ? '+' : ''}${s.tint}`);
+
+  setChk('chkCrtScanlines', s.crt_scanlines);
+  setVal('slCrtIntensity', s.crt_intensity || 0.35);
+  setChk('chkCrtCurve', s.crt_curve);
+  setChk('chkVhsMode', s.vhs_mode);
+  setVal('slVhsChroma', s.vhs_chroma || 2.0);
+  setChk('chkCelDeflicker', s.cel_deflicker);
+  setChk('chkAudioEQ', s.audio_eq);
+  setVal('slLineDarken', s.line_darken || 0.0);
+
+  // Sync Simple Mode Sliders
+  setVal('slSimpleSharp', Math.round((s.sharpness || 0.8) * 100));
+  setText('valSimpleSharp', `${Math.round((s.sharpness || 0.8) * 100)}%`);
+  setVal('slSimpleSat', Math.round((s.saturation || 1.26) * 100));
+  setText('valSimpleSat', `${Math.round((s.saturation || 1.26) * 100)}%`);
+  let brightOffset = Math.round((s.brightness || 0) * 1000);
+  setVal('slSimpleBright', brightOffset);
+  setText('valSimpleBright', brightOffset === 0 ? 'Normal' : (brightOffset > 0 ? `+${brightOffset}` : `${brightOffset}`));
+  let retroVal = s.vhs_mode ? 80 : (s.crt_scanlines ? Math.round((s.crt_intensity || 0.35) * 100) : 0);
+  setVal('slSimpleRetro', retroVal);
+  setText('valSimpleRetro', retroVal === 0 ? 'Off' : `${retroVal}%`);
+
+  // Sync CRT/VHS visual overlays
+  const crt = document.getElementById('crtOverlay');
+  if (crt) {
+    crt.style.display = s.crt_scanlines ? 'block' : 'none';
+    crt.style.opacity = ((s.crt_intensity || 0.35) * 1.5).toString();
+  }
+  const bounds = document.getElementById('canvasBounds');
+  if (bounds) {
+    if (s.crt_curve) bounds.classList.add('crt-curved');
+    else bounds.classList.remove('crt-curved');
+  }
+  const imgAfter = document.getElementById('imgAfter');
+  const vhsBar = document.getElementById('vhsTrackingBar');
+  if (imgAfter) {
+    if (s.vhs_mode) {
+      imgAfter.classList.add('vhs-mode-active');
+      let ch = s.vhs_chroma || 2.0;
+      imgAfter.style.filter = `drop-shadow(-${ch}px 0 0 rgba(255, 20, 100, 0.6)) drop-shadow(${ch}px 0 0 rgba(0, 220, 255, 0.6)) contrast(1.08) saturate(1.22)`;
+      if (vhsBar) vhsBar.style.display = 'block';
+    } else {
+      imgAfter.classList.remove('vhs-mode-active');
+      imgAfter.style.filter = 'none';
+      if (vhsBar) vhsBar.style.display = 'none';
+    }
+  }
+}
+
+// =========================================================================
+// WORKFLOW MODE SWITCHER (SIMPLE BEGINNER VS PRO STUDIO)
+// =========================================================================
+function switchWorkflowMode(mode) {
+  state.workflowMode = mode;
+  const btnSimple = document.getElementById('btnModeSimple');
+  const btnPro = document.getElementById('btnModePro');
+  const simplePanel = document.getElementById('simpleWorkflowPanel');
+  const studioTabs = document.querySelector('.studio-tabs');
+  const proTabs = ['tabColor', 'tabRetroCRT', 'tabAIUpscale', 'tabRestoration', 'tabGeometry', 'tabBatch', 'tabExport'];
+
+  if (mode === 'simple') {
+    btnSimple.classList.add('active');
+    btnPro.classList.remove('active');
+    simplePanel.style.display = 'flex';
+    studioTabs.style.display = 'none';
+    proTabs.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = 'none';
+    });
+    showToast("Simple Mode (Beginner Friendly)");
+  } else {
+    btnSimple.classList.remove('active');
+    btnPro.classList.add('active');
+    simplePanel.style.display = 'none';
+    studioTabs.style.display = 'flex';
+    switchSidebarTab(state.activeProTab || 'tabColor', document.querySelector('.studio-tab-btn'));
+    showToast("Pro Studio (DaVinci Mode)");
+  }
+}
+
+function onSimpleSliderChange(type, val) {
+  val = parseFloat(val);
+  pushHistory(`Adjust ${type.toUpperCase()}`);
+
+  if (type === 'sharp') {
+    state.settings.sharpness = val / 100;
+    state.settings.line_darken = (val / 100) * 0.4;
+    document.getElementById('valSimpleSharp').innerText = `${Math.round(val)}%`;
+  } else if (type === 'sat') {
+    state.settings.saturation = val / 100;
+    state.settings.contrast = 0.9 + ((val - 50) / 130) * 0.45;
+    document.getElementById('valSimpleSat').innerText = `${Math.round(val)}%`;
+  } else if (type === 'bright') {
+    state.settings.brightness = val / 1000;
+    state.settings.gamma = 1.0 - (val / 200);
+    document.getElementById('valSimpleBright').innerText = val === 0 ? 'Normal' : (val > 0 ? `+${val}` : `${val}`);
+  } else if (type === 'retro') {
+    if (val <= 5) {
+      state.settings.crt_scanlines = false;
+      state.settings.vhs_mode = false;
+      state.settings.crt_curve = false;
+      document.getElementById('valSimpleRetro').innerText = 'Off';
+    } else if (val <= 50) {
+      state.settings.crt_scanlines = true;
+      state.settings.crt_intensity = val / 100;
+      state.settings.crt_curve = val > 25;
+      state.settings.vhs_mode = false;
+      document.getElementById('valSimpleRetro').innerText = `CRT ${Math.round(val * 2)}%`;
+    } else {
+      state.settings.crt_scanlines = true;
+      state.settings.crt_intensity = 0.35;
+      state.settings.crt_curve = true;
+      state.settings.vhs_mode = true;
+      state.settings.vhs_chroma = 1.5 + ((val - 50) / 50) * 2.5;
+      document.getElementById('valSimpleRetro').innerText = `VHS + CRT ${Math.round(val)}%`;
+    }
+  }
+
+  syncAllInputsFromSettings();
+  updateLiveGPUGrade();
+  clearTimeout(state.debounceTimer);
+  state.debounceTimer = setTimeout(() => { refreshFrame(); }, 120);
+}
+
+function applySimpleStyle(styleId) {
+  document.querySelectorAll('.simple-style-card').forEach(c => c.classList.remove('active'));
+  const card = document.getElementById(`cardStyle${styleId.charAt(0).toUpperCase() + styleId.slice(1).replace(/_([a-z])/g, g => g[1].toUpperCase())}`);
+  if (card) card.classList.add('active');
+
+  quickApplyPreset(styleId);
+}
+
+// =========================================================================
 // INITIALIZATION
 // =========================================================================
+function setupSliderHistory() {
+  document.querySelectorAll('input[type="range"]').forEach(input => {
+    let initialVal = null;
+    input.addEventListener('pointerdown', () => {
+      initialVal = input.value;
+    });
+    input.addEventListener('change', () => {
+      if (initialVal !== null && initialVal !== input.value) {
+        pushHistory(`Adjust ${input.id.replace('sl', '')}`);
+        initialVal = null;
+      }
+    });
+  });
+}
+
 window.addEventListener('pywebviewready', async () => {
   let init = await window.pywebview.api.get_initial_state();
   state.queue = init.queue || [];
@@ -3187,18 +3841,22 @@ window.addEventListener('pywebviewready', async () => {
     if (init.branding.app_edition) document.getElementById('lblAppEdition').innerText = init.branding.app_edition;
   }
 
+  setupSliderHistory();
+  setupCurtainDivider();
+  setupKeyboardShortcuts();
+  switchWorkflowMode('simple');
+
   if (state.activeIndex >= 0) {
-    selectMedia(state.activeIndex);
+    await selectMedia(state.activeIndex);
   } else {
     document.getElementById('frameLoader').style.display = 'none';
     document.getElementById('emptyViewport').style.display = 'flex';
     document.getElementById('canvasBounds').style.display = 'none';
     document.getElementById('viewModePill').style.display = 'none';
     document.getElementById('canvasHud').style.display = 'none';
+    document.getElementById('starterPresetsBar').style.display = 'none';
     document.getElementById('folderNavGroup').style.display = 'none';
   }
-  setupCurtainDivider();
-  setupKeyboardShortcuts();
   updateBatchQueueUI();
 });
 
@@ -3215,53 +3873,98 @@ function showToast(msg) {
 function updateFolderNav() {
   let group = document.getElementById('folderNavGroup');
   let counter = document.getElementById('lblNavCounter');
+  let simpleCounter = document.getElementById('lblSimpleNavCounter');
   if (state.queue.length > 0) {
     group.style.display = 'flex';
     counter.innerText = `${state.activeIndex + 1} / ${state.queue.length}`;
+    if (simpleCounter) simpleCounter.innerText = `${state.activeIndex + 1} of ${state.queue.length}`;
   } else {
     group.style.display = 'none';
+    if (simpleCounter) simpleCounter.innerText = '--';
   }
 }
 
-function prevMedia() {
-  if (state.queue.length <= 1) return;
+async function prevMedia() {
+  if (state.queue.length <= 1) {
+    showToast("Single media in active queue");
+    return;
+  }
   let nextIdx = state.activeIndex - 1;
   if (nextIdx < 0) nextIdx = state.queue.length - 1;
-  selectMedia(nextIdx);
+  await selectMedia(nextIdx);
   showToast(`Switched: ${state.queue[nextIdx].filename}`);
 }
 
-function nextMedia() {
-  if (state.queue.length <= 1) return;
+async function nextMedia() {
+  if (state.queue.length <= 1) {
+    showToast("Single media in active queue");
+    return;
+  }
   let nextIdx = (state.activeIndex + 1) % state.queue.length;
-  selectMedia(nextIdx);
+  await selectMedia(nextIdx);
   showToast(`Switched: ${state.queue[nextIdx].filename}`);
 }
 
 function setupKeyboardShortcuts() {
   window.addEventListener('keydown', (e) => {
-    if (e.target.tagName === 'INPUT') return;
+    // Shortcuts for Undo & Redo (Ctrl+Z and Ctrl+Y / Ctrl+Shift+Z)
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) {
+      e.preventDefault();
+      undo();
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey))) {
+      e.preventDefault();
+      redo();
+      return;
+    }
+
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
     if (e.key === '[' || (e.altKey && e.key === 'ArrowLeft')) {
+      e.preventDefault();
       prevMedia();
     } else if (e.key === ']' || (e.altKey && e.key === 'ArrowRight')) {
+      e.preventDefault();
       nextMedia();
     } else if (e.key === 'f' || e.key === 'F11') {
+      e.preventDefault();
       toggleFullscreen();
+    } else if (e.key === 'z') {
+      e.preventDefault();
+      toggleZoomMode();
     }
   });
 }
 
-function selectMedia(idx) {
+async function selectMedia(idx) {
+  if (idx < 0 || idx >= state.queue.length) return;
   state.activeIndex = idx;
+  try {
+    if (window.pywebview && window.pywebview.api) {
+      await window.pywebview.api.select_queue_item(idx);
+    }
+  } catch (e) {
+    console.error("select_queue_item error:", e);
+  }
   let item = state.queue[idx];
   if (!item) return;
 
   document.getElementById('emptyViewport').style.display = 'none';
-  document.getElementById('canvasBounds').style.display = 'inline-flex';
+  document.getElementById('frameLoader').style.display = 'flex';
   document.getElementById('viewModePill').style.display = 'flex';
   document.getElementById('canvasHud').style.display = 'flex';
+  let starterBar = document.getElementById('starterPresetsBar');
+  if (starterBar) starterBar.style.display = 'flex';
 
   document.getElementById('lblVideoName').innerText = item.filename;
+  let sName = document.getElementById('lblSimpleVideoName');
+  if (sName) sName.innerText = item.filename;
+  let sType = document.getElementById('lblSimpleMediaType');
+  if (sType) sType.innerText = item.is_image ? 'PHOTO' : 'VIDEO';
+  let sRes = document.getElementById('lblSimpleRes');
+  if (sRes) sRes.innerText = `${item.width}x${item.height}`;
+
   document.getElementById('lblFileSize').innerText = `${item.size_mb} MB`;
   document.getElementById('lblMediaTypeBadge').innerText = item.is_image ? 'Active Photo' : 'Active Video';
   document.getElementById('valMetaRes').innerText = `${item.width}x${item.height} (${item.dar})`;
@@ -3280,6 +3983,29 @@ function selectMedia(idx) {
     trimCard.style.display = 'none';
     document.getElementById('lblTimeline').innerText = 'Photo Mode - Single Frame Canvas';
     document.getElementById('lblExportBtn').innerText = 'Export Remastered Photo';
+    let sExpBtn = document.getElementById('lblSimpleExportBtn');
+    if (sExpBtn) sExpBtn.innerText = 'Export Remastered Photo';
+    state.currentSec = 0;
+  } else {
+    scrubber.style.display = 'block';
+    jumps.style.display = 'flex';
+    trimCard.style.display = 'flex';
+    document.getElementById('lblExportBtn').innerText = 'Export Remastered Media';
+    let sExpBtn = document.getElementById('lblSimpleExportBtn');
+    if (sExpBtn) sExpBtn.innerText = 'Start 1-Click Remaster & Export';
+    
+    let dur = Math.max(1, Math.floor(item.duration));
+    scrubber.min = 0;
+    scrubber.max = dur;
+    let defSec = dur > 60 ? Math.floor(Math.min(dur * 0.1, 45)) : Math.floor(dur / 4);
+    scrubber.value = defSec;
+    state.currentSec = defSec;
+    updateTimeReadout();
+  }
+
+  updateBatchQueueUI();
+  await refreshFrame();
+}
     state.currentSec = 0;
   } else {
     scrubber.style.display = 'block';
@@ -3381,7 +4107,12 @@ function updateLiveGPUGrade() {
     `.trim());
   }
 
-  imgAfter.style.filter = `contrast(${contPct}%) saturate(${satPct}%) brightness(${brightPct}%) url(#liveGrade)`;
+  let filterStr = `contrast(${contPct}%) saturate(${satPct}%) brightness(${brightPct}%) url(#liveGrade)`;
+  if (s.vhs_mode) {
+    let ch = s.vhs_chroma || 2.5;
+    filterStr += ` drop-shadow(-${ch}px 0 0 rgba(255, 20, 100, 0.7)) drop-shadow(${ch}px 0 0 rgba(0, 220, 255, 0.7))`;
+  }
+  imgAfter.style.filter = filterStr;
 }
 
 // =========================================================================
@@ -3389,46 +4120,66 @@ function updateLiveGPUGrade() {
 // =========================================================================
 function onToggleCRTScanlines(checked) {
   state.settings.crt_scanlines = checked;
+  pushHistory(checked ? "Enable CRT Scanlines" : "Disable CRT Scanlines");
   const overlay = document.getElementById('crtOverlay');
-  overlay.style.display = checked ? 'block' : 'none';
+  const chk = document.getElementById('chkCrtScanlines');
+  if (chk && chk.checked !== checked) chk.checked = checked;
+  if (overlay) overlay.style.display = checked ? 'block' : 'none';
   showToast(checked ? "CRT Scanlines enabled" : "CRT Scanlines disabled");
 }
 
 function onCrtIntensityChange(val) {
   val = parseFloat(val);
   state.settings.crt_intensity = val;
-  document.getElementById('valCrtIntensity').innerText = `${Math.round(val * 100)}%`;
+  const lbl = document.getElementById('valCrtIntensity');
+  if (lbl) lbl.innerText = `${Math.round(val * 100)}%`;
   const overlay = document.getElementById('crtOverlay');
-  overlay.style.opacity = (val * 1.5).toString();
+  if (overlay) overlay.style.opacity = (val * 1.5).toString();
 }
 
 function onToggleCRTCurve(checked) {
   state.settings.crt_curve = checked;
+  pushHistory(checked ? "Enable Curved CRT Tube" : "Disable Curved CRT Tube");
   const bounds = document.getElementById('canvasBounds');
-  if (checked) bounds.classList.add('crt-curved');
-  else bounds.classList.remove('crt-curved');
+  const chk = document.getElementById('chkCrtCurve');
+  if (chk && chk.checked !== checked) chk.checked = checked;
+  if (bounds) {
+    if (checked) bounds.classList.add('crt-curved');
+    else bounds.classList.remove('crt-curved');
+  }
   showToast(checked ? "Curved glass tube monitor enabled" : "Flat canvas enabled");
 }
 
 function onToggleVHSMode(checked) {
   state.settings.vhs_mode = checked;
+  pushHistory(checked ? "Enable VHS Tape Mode" : "Disable VHS Tape Mode");
   const imgAfter = document.getElementById('imgAfter');
+  const trackingBar = document.getElementById('vhsTrackingBar');
+  const chk = document.getElementById('chkVhsMode');
+  if (chk && chk.checked !== checked) chk.checked = checked;
+
   if (checked) {
-    imgAfter.classList.add('vhs-jitter');
+    if (imgAfter) imgAfter.classList.add('vhs-mode-active');
+    if (trackingBar) trackingBar.style.display = 'block';
     showToast("VHS Analog Tape Mode active");
   } else {
-    imgAfter.classList.remove('vhs-jitter');
+    if (imgAfter) imgAfter.classList.remove('vhs-mode-active');
+    if (trackingBar) trackingBar.style.display = 'none';
   }
+  updateLiveGPUGrade();
 }
 
 function onVhsChromaChange(val) {
   val = parseFloat(val);
   state.settings.vhs_chroma = val;
-  document.getElementById('valVhsChroma').innerText = `${val.toFixed(1)} px`;
+  const lbl = document.getElementById('valVhsChroma');
+  if (lbl) lbl.innerText = `${val.toFixed(1)} px`;
+  updateLiveGPUGrade();
 }
 
 function onToggleAudioEQ(checked) {
   state.settings.audio_eq = checked;
+  pushHistory(checked ? "Enable Audio EQ" : "Disable Audio EQ");
   showToast(checked ? "Audio dialogue presence & hiss filter enabled" : "Audio filter disabled");
 }
 
@@ -3474,21 +4225,35 @@ async function refreshFrame() {
 
 function onFrameLoaded() {
   let loader = document.getElementById('frameLoader');
+  let bounds = document.getElementById('canvasBounds');
   let imgB = document.getElementById('imgBefore');
   let imgA = document.getElementById('imgAfter');
   let div = document.getElementById('curtainDivider');
   let tagL = document.getElementById('tagSource');
   let tagR = document.getElementById('tagRemaster');
 
+  let src = imgB.getAttribute('src');
+  if (!src || src === '#' || src.length < 5) return;
+
   loader.style.display = 'none';
+  if (bounds) {
+    bounds.style.display = 'inline-flex';
+    bounds.style.visibility = 'visible';
+    bounds.style.opacity = '1';
+  }
+  imgB.style.display = 'block';
   imgB.style.opacity = '1';
+  imgA.style.display = 'block';
   imgA.style.opacity = '1';
 
   if (state.viewMode === 'split' || state.viewMode === 'ab_compare') {
     div.style.display = 'block';
+  } else {
+    div.style.display = 'none';
   }
   tagL.style.display = 'block';
   tagR.style.display = 'block';
+  setCurtainPos(state.curtainPct);
 }
 
 // =========================================================================
@@ -3500,27 +4265,43 @@ function setCurtainPos(pct) {
   const divider = document.getElementById('curtainDivider');
   const afterClip = document.getElementById('afterClip');
 
-  if (divider) divider.style.left = `${pct}%`;
+  if (divider) {
+    divider.style.left = `${pct}%`;
+    const knob = divider.querySelector('.curtain-knob');
+    if (knob) {
+      if (pct < 4) {
+        knob.style.transform = `translate(calc(-50% + ${16 - (pct * 4)}px), -50%)`;
+      } else if (pct > 96) {
+        knob.style.transform = `translate(calc(-50% - ${16 - ((100 - pct) * 4)}px), -50%)`;
+      } else {
+        knob.style.transform = 'translate(-50%, -50%)';
+      }
+    }
+  }
   if (afterClip) afterClip.style.clipPath = `inset(0 0 0 ${pct}%)`;
 
   // Auto-fade badges if curtain handle approaches them to prevent overlapping/clipping
   const tagL = document.getElementById('tagSource');
   const tagR = document.getElementById('tagRemaster');
   if (tagL) {
-    if (pct < 18) {
+    if (pct < 22) {
       tagL.style.opacity = '0';
+      tagL.style.pointerEvents = 'none';
       tagL.style.transform = 'translateY(6px)';
     } else {
       tagL.style.opacity = '1';
+      tagL.style.pointerEvents = 'all';
       tagL.style.transform = 'translateY(0)';
     }
   }
   if (tagR) {
-    if (pct > 82) {
+    if (pct > 78) {
       tagR.style.opacity = '0';
+      tagR.style.pointerEvents = 'none';
       tagR.style.transform = 'translateY(6px)';
     } else {
       tagR.style.opacity = '1';
+      tagR.style.pointerEvents = 'all';
       tagR.style.transform = 'translateY(0)';
     }
   }
@@ -3537,20 +4318,30 @@ function setupCurtainDivider() {
     setCurtainPos(pct);
   };
 
-  bounds.addEventListener('mousedown', (e) => {
+  const onPointerDown = (e) => {
     if (state.viewMode !== 'split' && state.viewMode !== 'ab_compare') return;
+    if (e.target.closest('.canvas-hud') || e.target.closest('.tag-badge')) return;
     state.isCurtainDragging = true;
+    try { bounds.setPointerCapture(e.pointerId); } catch(_) {}
     updateFromEvent(e);
-  });
+  };
 
-  window.addEventListener('mousemove', (e) => {
+  const onPointerMove = (e) => {
     if (!state.isCurtainDragging) return;
     updateFromEvent(e);
-  });
+  };
 
-  window.addEventListener('mouseup', () => {
-    state.isCurtainDragging = false;
-  });
+  const onPointerUp = (e) => {
+    if (state.isCurtainDragging) {
+      state.isCurtainDragging = false;
+      try { bounds.releasePointerCapture(e.pointerId); } catch(_) {}
+    }
+  };
+
+  bounds.addEventListener('pointerdown', onPointerDown);
+  bounds.addEventListener('pointermove', onPointerMove);
+  bounds.addEventListener('pointerup', onPointerUp);
+  bounds.addEventListener('pointercancel', onPointerUp);
 }
 
 function setViewMode(mode) {
@@ -3613,6 +4404,7 @@ function toggleFullscreen() {
 // =========================================================================
 function startWheelDrag(e, wheelType) {
   e.preventDefault();
+  pushHistory(`Adjust ${wheelType.toUpperCase()} Wheel`);
   state.activeWheel = wheelType;
   updateWheelPosition(e, wheelType);
 
@@ -3685,6 +4477,7 @@ function onWheelMasterLive(type, val) {
 }
 
 function resetSingleWheel(type) {
+  pushHistory(`Reset ${type.toUpperCase()} Wheel`);
   state.settings[`${type}_r`] = 0.0;
   state.settings[`${type}_g`] = 0.0;
   state.settings[`${type}_b`] = 0.0;
@@ -3700,6 +4493,7 @@ function resetSingleWheel(type) {
 }
 
 function resetColorWheels() {
+  pushHistory("Reset All Color Wheels");
   ['lift', 'gamma', 'gain'].forEach(t => resetSingleWheel(t));
   showToast("Reset 3-way color wheels to neutral");
 }
@@ -3731,6 +4525,7 @@ function onParamChangeLive(key, val, lblId) {
 }
 
 function onToggleParam(key, checked) {
+  pushHistory(`Toggle ${key}`);
   state.settings[key] = checked;
   refreshFrame();
 }
@@ -3740,40 +4535,83 @@ function onToggleParam(key, checked) {
 // =========================================================================
 function quickApplyPreset(presetId) {
   let presets = {
-    cel_master: {"contrast": 1.140, "brightness": -0.018, "gamma": 0.880, "saturation": 1.260, "sharpness": 0.80, "denoise": 3.0, "temp": 0, "exposure": 0.0, "crt_scanlines": false, "vhs_mode": false},
-    film_35mm: {"contrast": 1.080, "brightness": -0.010, "gamma": 0.940, "saturation": 1.120, "sharpness": 0.50, "denoise": 1.5, "temp": 14, "exposure": 0.0, "crt_scanlines": false, "vhs_mode": false},
-    ink_sharp: {"contrast": 1.180, "brightness": -0.020, "gamma": 0.860, "saturation": 1.220, "sharpness": 1.00, "denoise": 4.5, "temp": 0, "exposure": 0.0, "crt_scanlines": false, "vhs_mode": false},
-    hdr_pop: {"contrast": 1.250, "brightness": -0.028, "gamma": 0.840, "saturation": 1.380, "sharpness": 0.85, "denoise": 2.5, "temp": 0, "exposure": 0.1, "crt_scanlines": false, "vhs_mode": false},
-    retro_crt: {"contrast": 1.120, "brightness": 0.005, "gamma": 0.900, "saturation": 1.320, "sharpness": 0.60, "denoise": 2.0, "temp": 8, "exposure": 0.0, "crt_scanlines": true, "vhs_mode": false},
-    oled_clean: {"contrast": 1.160, "brightness": -0.015, "gamma": 0.880, "saturation": 1.180, "sharpness": 0.80, "denoise": 3.5, "temp": -10, "exposure": 0.0, "crt_scanlines": false, "vhs_mode": false}
+    ai_remaster: {
+      contrast: 1.15, brightness: -0.015, gamma: 0.88, saturation: 1.25, sharpness: 0.85,
+      denoise: 3.0, temp: 0, exposure: 0.0, crt_scanlines: false, crt_curve: false, vhs_mode: false, resolution: "4K"
+    },
+    vibrant_cel: {
+      contrast: 1.18, brightness: -0.020, gamma: 0.86, saturation: 1.30, sharpness: 0.80,
+      denoise: 2.5, temp: 4, exposure: 0.0, crt_scanlines: false, crt_curve: false, vhs_mode: false
+    },
+    retro_crt: {
+      contrast: 1.12, brightness: 0.005, gamma: 0.90, saturation: 1.28, sharpness: 0.65,
+      denoise: 2.0, temp: 8, exposure: 0.0, crt_scanlines: true, crt_curve: true, crt_intensity: 0.40, vhs_mode: false
+    },
+    vintage_vhs: {
+      contrast: 1.10, brightness: -0.010, gamma: 0.92, saturation: 1.20, sharpness: 0.40,
+      denoise: 1.5, temp: 12, exposure: 0.0, crt_scanlines: true, crt_curve: false, crt_intensity: 0.25, vhs_mode: true, vhs_chroma: 2.5
+    },
+    film_35mm: {
+      contrast: 1.08, brightness: -0.008, gamma: 0.94, saturation: 1.12, sharpness: 0.50,
+      denoise: 1.5, grain: 2.0, temp: 14, exposure: 0.0, crt_scanlines: false, crt_curve: false, vhs_mode: false
+    },
+    studio_clean: {
+      contrast: 1.16, brightness: -0.015, gamma: 0.88, saturation: 1.18, sharpness: 0.75,
+      denoise: 3.5, grain: 0.0, temp: -6, exposure: 0.0, crt_scanlines: false, crt_curve: false, vhs_mode: false
+    },
+    neutral_flat: {
+      contrast: 1.0, brightness: 0.0, gamma: 1.0, saturation: 1.0, sharpness: 0.0,
+      denoise: 0.0, grain: 0.0, temp: 0, tint: 0, exposure: 0.0, crt_scanlines: false, crt_curve: false, vhs_mode: false
+    },
+    cel_master: {
+      contrast: 1.14, brightness: -0.018, gamma: 0.88, saturation: 1.26, sharpness: 0.80,
+      denoise: 3.0, temp: 0, exposure: 0.0, crt_scanlines: false, crt_curve: false, vhs_mode: false
+    },
+    ink_sharp: {
+      contrast: 1.18, brightness: -0.020, gamma: 0.86, saturation: 1.22, sharpness: 1.00,
+      denoise: 4.5, temp: 0, exposure: 0.0, crt_scanlines: false, crt_curve: false, vhs_mode: false
+    },
+    hdr_pop: {
+      contrast: 1.25, brightness: -0.028, gamma: 0.84, saturation: 1.38, sharpness: 0.85,
+      denoise: 2.5, temp: 0, exposure: 0.1, crt_scanlines: false, crt_curve: false, vhs_mode: false
+    },
+    oled_clean: {
+      contrast: 1.16, brightness: -0.015, gamma: 0.88, saturation: 1.18, sharpness: 0.80,
+      denoise: 3.5, temp: -10, exposure: 0.0, crt_scanlines: false, crt_curve: false, vhs_mode: false
+    }
   };
 
   let p = presets[presetId];
   if (!p) return;
+  pushHistory(`Preset: ${presetId.replace('_', ' ').toUpperCase()}`);
+
   for (let k in p) state.settings[k] = p[k];
 
-  document.getElementById('slContrast').value = p.contrast;
-  document.getElementById('valContrast').innerText = p.contrast.toFixed(2);
-  document.getElementById('slSaturation').value = p.saturation;
-  document.getElementById('valSaturation').innerText = p.saturation.toFixed(2);
-  document.getElementById('slGamma').value = p.gamma;
-  document.getElementById('valGamma').innerText = p.gamma.toFixed(2);
-  document.getElementById('slBrightness').value = p.brightness;
-  document.getElementById('valBrightness').innerText = p.brightness.toFixed(3);
-  document.getElementById('slSharpness').value = p.sharpness;
-  document.getElementById('valSharpness').innerText = p.sharpness.toFixed(2);
-  document.getElementById('slTemp').value = p.temp;
-  document.getElementById('valTemp').innerText = `${p.temp > 0 ? '+' : ''}${p.temp}`;
-  document.getElementById('slExposure').value = p.exposure;
-  document.getElementById('valExposure').innerText = `${p.exposure.toFixed(2)} EV`;
-
-  if (p.crt_scanlines !== undefined) {
-    document.getElementById('chkCrtScanlines').checked = p.crt_scanlines;
-    onToggleCRTScanlines(p.crt_scanlines);
+  // Highlight active starter chip
+  document.querySelectorAll('.starter-chip').forEach(c => c.classList.remove('active'));
+  const chipMap = {
+    ai_remaster: 'chipAiRemaster',
+    vibrant_cel: 'chipVibrantCel',
+    retro_crt: 'chipRetroCrt',
+    vintage_vhs: 'chipVintageVhs',
+    film_35mm: 'chipFilm35mm',
+    studio_clean: 'chipStudioClean',
+    neutral_flat: 'chipNeutralFlat'
+  };
+  if (chipMap[presetId]) {
+    const chip = document.getElementById(chipMap[presetId]);
+    if (chip) chip.classList.add('active');
   }
 
+  // Highlight active simple style card
+  document.querySelectorAll('.simple-style-card').forEach(c => c.classList.remove('active'));
+  const cardId = `cardStyle${presetId.charAt(0).toUpperCase() + presetId.slice(1).replace(/_([a-z])/g, g => g[1].toUpperCase())}`;
+  const card = document.getElementById(cardId);
+  if (card) card.classList.add('active');
+
+  syncAllInputsFromSettings();
   updateLiveGPUGrade();
-  showToast(`Applied: ${presetId.toUpperCase()}`);
+  showToast(`Applied Preset: ${presetId.replace('_', ' ').toUpperCase()}`);
   refreshFrame();
 }
 
@@ -3956,6 +4794,7 @@ function onToggleDeleteOriginal(checked) {
 }
 
 function resetSlidersToDefault() {
+  pushHistory("Reset Defaults");
   let defs = {
     contrast: 1.140, brightness: -0.018, gamma: 0.880, saturation: 1.260, sharpness: 0.800,
     exposure: 0.0, temp: 0, tint: 0, denoise: 3.0, grain: 0.0, deband: true, edge_clean: true,
@@ -3964,35 +4803,7 @@ function resetSlidersToDefault() {
   };
   for (let k in defs) state.settings[k] = defs[k];
 
-  document.getElementById('slExposure').value = 0.0;
-  document.getElementById('valExposure').innerText = "0.0 EV";
-  document.getElementById('slContrast').value = 1.14;
-  document.getElementById('valContrast').innerText = "1.14";
-  document.getElementById('slSaturation').value = 1.26;
-  document.getElementById('valSaturation').innerText = "1.26";
-  document.getElementById('slGamma').value = 0.88;
-  document.getElementById('valGamma').innerText = "0.88";
-  document.getElementById('slBrightness').value = -0.018;
-  document.getElementById('valBrightness').innerText = "-0.018";
-  document.getElementById('slTemp').value = 0;
-  document.getElementById('valTemp').innerText = "0";
-  document.getElementById('slSharpness').value = 0.80;
-  document.getElementById('valSharpness').innerText = "0.80";
-  document.getElementById('slDenoise').value = 3.0;
-  document.getElementById('valDenoise').innerText = "3.0";
-  document.getElementById('slGrain').value = 0.0;
-  document.getElementById('valGrain').innerText = "0.00";
-  document.getElementById('slLineDarken').value = 0.0;
-  document.getElementById('valLineDarken').innerText = "0.00";
-  document.getElementById('chkCrtScanlines').checked = false;
-  document.getElementById('chkCrtCurve').checked = false;
-  document.getElementById('chkVhsMode').checked = false;
-  document.getElementById('chkCelDeflicker').checked = false;
-  document.getElementById('chkAudioEQ').checked = false;
-
-  onToggleCRTScanlines(false);
-  onToggleCRTCurve(false);
-  onToggleVHSMode(false);
+  syncAllInputsFromSettings();
   resetColorWheels();
   updateLiveGPUGrade();
   showToast("Restored all sliders to calibrated defaults");
