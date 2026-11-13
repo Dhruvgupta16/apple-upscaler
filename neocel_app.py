@@ -45,6 +45,37 @@ def get_base_dir():
         return os.path.dirname(os.path.abspath(sys.executable))
     return os.path.dirname(os.path.abspath(__file__))
 
+def load_branding():
+    default_branding = {
+        "app_name": "NeoCel AI Studio",
+        "app_edition": "Neural Pro",
+        "app_version": "2.2.0",
+        "app_tagline": "Universal Anime & Film Neural Remastering Studio",
+        "window_title": "NeoCel AI Studio Pro - Universal Anime & Film Restoration 2026",
+        "author": "Community Open-Source",
+        "license": "MIT"
+    }
+    candidates = [
+        os.path.join(get_base_dir(), "branding.json"),
+        os.path.join(get_base_dir(), "AnimeRemasterStudio", "branding.json"),
+        os.path.join(os.path.dirname(get_base_dir()), "AnimeRemasterStudio", "branding.json")
+    ]
+    if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+        candidates.insert(0, os.path.join(sys._MEIPASS, "branding.json"))
+        
+    for c in candidates:
+        if os.path.exists(c):
+            try:
+                with open(c, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    default_branding.update(data)
+                break
+            except Exception:
+                pass
+    return default_branding
+
+BRANDING = load_branding()
+
 def get_realesrgan_binary():
     candidates = []
     if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
@@ -222,7 +253,6 @@ class UniversalStudioBackend:
         self.batch_cancel = False
         self.encoding_process = None
         self.start_encode_time = 0
-        self.preview_cache = {}
         self.output_dir = ""
         self.custom_lut_path = ""
         self.thread_pool = ThreadPoolExecutor(max_workers=6)
@@ -296,13 +326,13 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
             "output_dir": self.output_dir,
             "potplayer_found": bool(self.potplayer_exe and os.path.exists(self.potplayer_exe)),
             "realesrgan_found": bool(self.realesrgan_exe and os.path.exists(self.realesrgan_exe)),
-            "custom_lut_loaded": bool(self.custom_lut_path and os.path.exists(self.custom_lut_path))
+            "custom_lut_loaded": bool(self.custom_lut_path and os.path.exists(self.custom_lut_path)),
+            "branding": BRANDING
         }
 
     def select_queue_item(self, index):
         if 0 <= index < len(self.queue):
             self.active_index = index
-            # Invalidate frame cache on media switch
             self.cached_media_path = ""
             self.cached_ts_str = ""
             return self.queue[index]
@@ -434,7 +464,6 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
         ts_str = "00:00:00" if item.get("is_image") else format_time(timestamp_sec)
         
         try:
-            # Use cached source frame if available, else extract
             temp_frame = self.cached_source_file if (self.cached_media_path == item["path"] and self.cached_ts_str == ts_str and os.path.exists(self.cached_source_file)) else None
             if not temp_frame:
                 temp_frame = os.path.join(tempfile.gettempdir(), f"neocel_match_src_{int(time.time()*1000)}.jpg")
@@ -520,7 +549,7 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
                 break
         return scenes
 
-    # ================= CORE FILTER & AI PIPELINE =================
+    # ================= CORE FILTER & RETRO CRT PIPELINE =================
     def build_filter_graph(self, item, settings, for_preview=False):
         contrast = float(settings.get("contrast", 1.140))
         gamma = float(settings.get("gamma", 0.880))
@@ -529,7 +558,6 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
         brightness = float(settings.get("brightness", -0.018))
         exposure = float(settings.get("exposure", 0.0))
         
-        # Color Wheels: Lift, Gamma, Gain + Master Levels
         lift_master = float(settings.get("lift_master", 0.0))
         gamma_master = float(settings.get("gamma_master", 0.0))
         gain_master = float(settings.get("gain_master", 0.0))
@@ -556,6 +584,14 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
         lut_mode = settings.get("lut_mode", "none")
         lut_intensity = float(settings.get("lut_intensity", 1.0))
         ai_model = settings.get("ai_model", "realesr-animevideov3")
+        
+        # RETRO & ANALOG FEATURES
+        crt_scanlines = settings.get("crt_scanlines", False)
+        crt_intensity = float(settings.get("crt_intensity", 0.35))
+        vhs_mode = settings.get("vhs_mode", False)
+        vhs_chroma = float(settings.get("vhs_chroma", 2.0))
+        line_darken = float(settings.get("line_darken", 0.0))
+        cel_deflicker = settings.get("cel_deflicker", False)
 
         w, h = item["width"], item["height"]
         is_4_3 = (item.get("dar") == "4:3") or (abs(w / max(1, h) - 4/3) < 0.15)
@@ -585,6 +621,9 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
         if deinterlace and not is_image and not for_preview:
             chain.append("yadif=mode=send_frame:parity=auto:deint=all")
 
+        if cel_deflicker and not is_image and not for_preview:
+            chain.append("tblend=all_mode=average")
+
         if edge_clean and w >= 640 and h >= 480 and not for_preview:
             chain.append(f"crop={w-4}:{h-4}:2:2")
 
@@ -611,11 +650,22 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
         if any(abs(v) > 0.005 for v in [tot_rs, tot_gs, tot_bs, tot_rm, tot_gm, tot_bm, tot_rh, tot_gh, tot_bh]):
             chain.append(f"colorbalance=rs={tot_rs}:gs={tot_gs}:bs={tot_bs}:rm={tot_rm}:gm={tot_gm}:bm={tot_bm}:rh={tot_rh}:gh={tot_gh}:bh={tot_bh}")
 
+        if line_darken > 0.05:
+            chain.append(f"unsharp=lx=3:ly=3:la={line_darken*1.2:.2f}:cx=3:cy=3:ca=0.0")
+
         if sharp > 0.05:
             chain.append(f"cas=strength={sharp:.2f}")
 
         if grain > 0.01 and not for_preview:
             chain.append(f"noise=alls={int(grain * 25)}:allf=t+u")
+
+        # RETRO CRT SCANLINES & VHS TAPE EFFECT
+        if crt_scanlines and not for_preview:
+            chain.append(f"drawgrid=width=10000:height=4:thickness=1:color=black@{crt_intensity:.2f}")
+            
+        if vhs_mode and not for_preview:
+            s_val = int(vhs_chroma)
+            chain.append(f"rgbashift=rh={-s_val}:bh={s_val}:rv=1:bv=-1")
 
         lut_file = None
         if lut_mode == "custom" and self.custom_lut_path and os.path.exists(self.custom_lut_path):
@@ -702,7 +752,6 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
         )
 
         if need_source_extract:
-            # Extract raw unscaled source frame once
             cmd_b = ["ffmpeg", "-y"]
             if not is_image: cmd_b += ["-ss", ts_str]
             cmd_b += [
@@ -719,7 +768,7 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
             
             self.cached_media_path = in_path
             self.cached_ts_str = ts_str
-            self.cached_ai_model = "" # Invalidate neural upscale cache
+            self.cached_ai_model = ""
 
         # 2. NEURAL UPSCALING CACHE (ONLY RUNS ONCE PER TIMESTAMP OR MODEL CHANGE)
         if "realesr" in ai_model and self.realesrgan_exe and os.path.exists(self.realesrgan_exe):
@@ -736,7 +785,8 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
                     "-m", m_dir,
                     "-n", m_arg,
                     "-s", s_arg,
-                    "-g", "0"
+                    "-g", "0",
+                    "-j", "2:2:2"
                 ]
                 subprocess.run(cmd_ai, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **WIN_FLAGS)
                 self.cached_ai_model = ai_model
@@ -786,12 +836,26 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
             "name_b": "Lanczos-3 Sinc Scaler"
         }
 
-    # ================= PARALLEL VISUAL AUDITION (SUGGEST ENHANCEMENTS) =================
+    # ================= PARALLEL VISUAL AUDITION (SUGGEST ENHANCEMENTS - BUG FIXED) =================
     def get_preset_auditions(self, timestamp_sec):
         if self.active_index < 0:
             return []
         item = self.queue[self.active_index]
-        base_input = self.cached_source_file if os.path.exists(self.cached_source_file) else item["path"]
+        is_image = item.get("is_image", False)
+        ts_str = "00:00:00" if is_image else format_time(timestamp_sec)
+
+        # 1. Guarantee base frame is extracted at current timestamp
+        if not os.path.exists(self.cached_source_file) or self.cached_media_path != item["path"] or self.cached_ts_str != ts_str:
+            cmd_b = ["ffmpeg", "-y"]
+            if not is_image: cmd_b += ["-ss", ts_str]
+            cmd_b += ["-i", item["path"], "-vframes", "1", "-an", "-sn", "-f", "image2", "-c:v", "mjpeg", "-q:v", "2", self.cached_source_file]
+            subprocess.run(cmd_b, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **WIN_FLAGS)
+            self.cached_media_path = item["path"]
+            self.cached_ts_str = ts_str
+
+        base_input = self.cached_source_file
+        if not os.path.exists(base_input):
+            return []
 
         presets = [
             {
@@ -799,52 +863,73 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
                 "name": "Reference Cel Master",
                 "tag": "Balanced Reference",
                 "desc": "Telecine black restoration, deep saturation, AMD CAS 0.80 line clarity.",
-                "settings": {"contrast": 1.140, "brightness": -0.018, "gamma": 0.880, "saturation": 1.260, "sharpness": 0.80, "denoise": 3.0, "grain": 0.0, "deband": True, "temp": 0, "exposure": 0.0}
-            },
-            {
-                "id": "ink_sharp",
-                "name": "Ink Outline 4K",
-                "tag": "Max Definition",
-                "desc": "Full CAS 1.00 sharpness with cel artifact smoothing for 4K display.",
-                "settings": {"contrast": 1.180, "brightness": -0.020, "gamma": 0.860, "saturation": 1.220, "sharpness": 1.00, "denoise": 4.5, "grain": 0.0, "deband": True, "temp": 0, "exposure": 0.0}
+                "settings": {"contrast": 1.140, "brightness": -0.018, "gamma": 0.880, "saturation": 1.260, "sharpness": 0.80, "denoise": 3.0, "temp": 0, "exposure": 0.0, "crt_scanlines": False, "vhs_mode": False}
             },
             {
                 "id": "film_35mm",
                 "name": "35mm Analog Film",
                 "tag": "Cinematic Warm",
                 "desc": "Warm analog color temperature, fine 35mm grain, soft highlight knee.",
-                "settings": {"contrast": 1.080, "brightness": -0.010, "gamma": 0.940, "saturation": 1.120, "sharpness": 0.50, "denoise": 1.5, "grain": 0.08, "deband": True, "temp": 14, "exposure": 0.0}
+                "settings": {"contrast": 1.080, "brightness": -0.010, "gamma": 0.940, "saturation": 1.120, "sharpness": 0.50, "denoise": 1.5, "temp": 14, "exposure": 0.0, "crt_scanlines": False, "vhs_mode": False}
+            },
+            {
+                "id": "ink_sharp",
+                "name": "Ink Outline 4K",
+                "tag": "Max Definition",
+                "desc": "Full CAS 1.00 sharpness with cel artifact smoothing for 4K display.",
+                "settings": {"contrast": 1.180, "brightness": -0.020, "gamma": 0.860, "saturation": 1.220, "sharpness": 1.00, "denoise": 4.5, "temp": 0, "exposure": 0.0, "crt_scanlines": False, "vhs_mode": False}
             },
             {
                 "id": "hdr_pop",
                 "name": "Dynamic HDR Punch",
                 "tag": "Punchy Contrast",
                 "desc": "Deep inky shadows, punchy contrast ratio, vivid saturated primaries.",
-                "settings": {"contrast": 1.250, "brightness": -0.028, "gamma": 0.840, "saturation": 1.380, "sharpness": 0.85, "denoise": 2.5, "grain": 0.0, "deband": True, "temp": 0, "exposure": 0.1}
+                "settings": {"contrast": 1.250, "brightness": -0.028, "gamma": 0.840, "saturation": 1.380, "sharpness": 0.85, "denoise": 2.5, "temp": 0, "exposure": 0.1, "crt_scanlines": False, "vhs_mode": False}
             },
             {
-                "id": "ghibli",
-                "name": "Ghibli Nostalgia",
-                "tag": "Organic Nature",
-                "desc": "Lush vibrant greens, warm golden sunlight, lifted shadow details.",
-                "settings": {"contrast": 1.100, "brightness": 0.005, "gamma": 0.920, "saturation": 1.300, "sharpness": 0.65, "denoise": 2.0, "grain": 0.04, "deband": True, "temp": 20, "exposure": 0.0}
+                "id": "retro_crt",
+                "name": "90s CRT Broadcast",
+                "tag": "Retro Nostalgia",
+                "desc": "Phosphor scanlines, subtle curved screen glass, authentic TV blooming.",
+                "settings": {"contrast": 1.120, "brightness": 0.005, "gamma": 0.900, "saturation": 1.320, "sharpness": 0.60, "denoise": 2.0, "temp": 8, "exposure": 0.0, "crt_scanlines": True, "vhs_mode": False}
             },
             {
                 "id": "oled_clean",
                 "name": "Modern OLED Clean",
                 "tag": "Zero Banding",
                 "desc": "Pristine debanded gradients, cool neutral whites, clean modern edge art.",
-                "settings": {"contrast": 1.160, "brightness": -0.015, "gamma": 0.880, "saturation": 1.180, "sharpness": 0.80, "denoise": 3.5, "grain": 0.0, "deband": True, "temp": -10, "exposure": 0.0}
+                "settings": {"contrast": 1.160, "brightness": -0.015, "gamma": 0.880, "saturation": 1.180, "sharpness": 0.80, "denoise": 3.5, "temp": -10, "exposure": 0.0, "crt_scanlines": False, "vhs_mode": False}
             }
         ]
 
         def render_preset(p):
             try:
-                f_str, is_comp, tw, th = self.build_filter_graph(item, p["settings"], for_preview=True)
-                cmd = ["ffmpeg", "-y", "-i", base_input]
-                if is_comp: cmd += ["-filter_complex", f_str]
-                else: cmd += ["-vf", f_str]
-                cmd += ["-vframes", "1", "-an", "-sn", "-f", "image2", "-c:v", "mjpeg", "-q:v", "3", "pipe:1"]
+                s = p["settings"]
+                c = float(s.get("contrast", 1.14))
+                b = float(s.get("brightness", -0.018))
+                g = float(s.get("gamma", 0.88))
+                sat = float(s.get("saturation", 1.26))
+                sharp = float(s.get("sharpness", 0.80))
+                temp = float(s.get("temp", 0.0))
+                
+                chain = [
+                    f"eq=contrast={c:.2f}:brightness={b:.3f}:gamma={g:.2f}:saturation={sat:.2f}",
+                    f"scale=320:240:flags=bilinear"
+                ]
+                if abs(temp) > 1:
+                    chain.append(f"colorbalance=rs={temp*0.005:.3f}:bs={-temp*0.005:.3f}")
+                if sharp > 0.1:
+                    chain.append(f"cas=strength={sharp:.2f}")
+                if s.get("crt_scanlines"):
+                    chain.append("drawgrid=width=10000:height=4:thickness=1:color=black@0.4")
+                
+                vf_str = ",".join(chain)
+                cmd = [
+                    "ffmpeg", "-y", "-i", base_input,
+                    "-vf", vf_str,
+                    "-vframes", "1", "-an", "-sn",
+                    "-f", "image2", "-c:v", "mjpeg", "-q:v", "4", "pipe:1"
+                ]
                 r = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, **WIN_FLAGS)
                 b64 = base64.b64encode(r.stdout).decode("ascii") if r.stdout else ""
                 return {
@@ -855,7 +940,8 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
                     "settings": p["settings"],
                     "thumb": f"data:image/jpeg;base64,{b64}" if b64 else ""
                 }
-            except Exception:
+            except Exception as e:
+                print(f"Audition error: {e}")
                 return None
 
         results = list(self.thread_pool.map(render_preset, presets))
@@ -933,6 +1019,7 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
             trim_out = parse_time_to_seconds(settings.get("trim_out", "00:00:00"))
             delete_orig = settings.get("delete_original", False)
             ai_model = settings.get("ai_model", "realesr-animevideov3")
+            audio_eq = settings.get("audio_eq", False)
 
             if "av1" in gpu_mode: vcodec = "av1_nvenc"
             elif "h264" in gpu_mode: vcodec = "h264_nvenc"
@@ -979,7 +1066,8 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
                                 "-m", m_dir,
                                 "-n", m_arg,
                                 "-s", s_arg,
-                                "-g", "0"
+                                "-g", "0",
+                                "-j", "2:2:2"
                             ]
                             subprocess.run(cmd_r, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **WIN_FLAGS)
                             try: os.remove(temp_pre)
@@ -1011,6 +1099,10 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
                         cmd += ["-preset", "p2", "-cq", cq_val, "-spatial-aq", "1", "-temporal-aq", "1"]
                     else:
                         cmd += ["-crf", cq_val, "-preset", "medium"]
+
+                    # Dialogue Presence EQ & Hiss Filter
+                    if audio_eq:
+                        cmd += ["-af", "afftdn=nf=-25,equalizer=f=3000:width_type=h:width=1000:g=3.5"]
 
                     if audio_mode == "aac" or export_fmt in ("mp4", "mov"):
                         cmd += ["-c:a", "aac", "-b:a", "320k"]
@@ -1096,41 +1188,41 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
         return False
 
 # =========================================================================
-# COMMERCIAL-GRADE DAVINCI RESOLVE DARK PRO INTERFACE (WITH GPU REAL-TIME SHADING)
+# REFINED STUDIO PRO INTERFACE (SLEEK MODERN PALETTE & CRT SHADING)
 # =========================================================================
 HTML_UI = """<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>NeoCel AI Studio Pro - Universal Anime & Film Restoration</title>
+<title>NeoCel AI Studio Pro</title>
 <style>
 :root {
-  --bg-app: #0a0b0f;
-  --bg-surface: #11131a;
-  --bg-panel: #161823;
-  --bg-elevated: #1d202e;
+  --bg-app: #090a0f;
+  --bg-surface: #10121a;
+  --bg-panel: #161824;
+  --bg-elevated: #1c1f2e;
   --bg-input: #232738;
-  --border-subtle: #202434;
-  --border-bright: #32384e;
+  --border-subtle: rgba(255, 255, 255, 0.07);
+  --border-bright: rgba(255, 255, 255, 0.14);
   
-  --accent-primary: #4f46e5;
-  --accent-primary-hover: #4338ca;
-  --accent-cyan: #06b6d4;
+  --accent-primary: #5246ea;
+  --accent-primary-hover: #4538df;
+  --accent-cyan: #38bdf8;
   --accent-emerald: #10b981;
   --accent-amber: #f59e0b;
   --accent-rose: #f43f5e;
   
-  --text-main: #f3f4f6;
-  --text-sub: #9ca3af;
+  --text-main: #f8fafc;
+  --text-sub: #94a3b8;
   --text-dim: #64748b;
   
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
   
-  --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
   --radius-pill: 9999px;
   
   --ease-fluid: cubic-bezier(0.16, 1, 0.3, 1);
@@ -1146,6 +1238,7 @@ body {
   display: flex;
   overflow: hidden;
   font-size: 13px;
+  line-height: 1.4;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -1168,8 +1261,8 @@ body {
 
 /* TOPBAR */
 .topbar {
-  height: 52px;
-  padding: 0 18px;
+  height: 54px;
+  padding: 0 20px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1180,17 +1273,17 @@ body {
 .brand-group {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 .brand-logo {
-  width: 26px;
-  height: 26px;
-  background: linear-gradient(135deg, #4f46e5, #06b6d4);
-  border-radius: 6px;
+  width: 28px;
+  height: 28px;
+  background: linear-gradient(135deg, #5246ea, #38bdf8);
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.4);
+  box-shadow: 0 4px 12px rgba(82, 70, 234, 0.35);
 }
 .brand-title {
   font-weight: 700;
@@ -1200,14 +1293,50 @@ body {
 }
 .brand-badge {
   font-size: 10px;
-  font-weight: 600;
-  color: #a5b4fc;
-  background: #1e1b4b;
-  border: 1px solid #3730a3;
+  font-weight: 700;
+  color: #c7d2fe;
+  background: rgba(82, 70, 234, 0.2);
+  border: 1px solid rgba(82, 70, 234, 0.4);
   padding: 2px 8px;
   border-radius: var(--radius-pill);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.6px;
+}
+
+/* FOLDER VIDEO NAVIGATION ARROWS */
+.folder-nav-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-subtle);
+  padding: 3px 8px;
+  border-radius: var(--radius-pill);
+  margin-left: 10px;
+}
+.btn-nav-arrow {
+  background: transparent;
+  border: none;
+  color: var(--text-sub);
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.btn-nav-arrow:hover {
+  background: var(--bg-input);
+  color: #ffffff;
+}
+.lbl-nav-counter {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-main);
+  padding: 0 4px;
+  font-family: var(--font-mono);
 }
 
 .topbar-actions {
@@ -1227,21 +1356,22 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
-  transition: all 0.15s var(--ease-fluid);
+  transition: all 0.2s var(--ease-fluid);
 }
 .btn-action:hover {
   background: var(--bg-elevated);
   border-color: var(--border-bright);
+  transform: translateY(-1px);
 }
 .btn-action.suggest {
-  background: #1e1b4b;
-  border-color: #6366f1;
+  background: rgba(82, 70, 234, 0.15);
+  border-color: rgba(82, 70, 234, 0.5);
   color: #c7d2fe;
 }
 .btn-action.suggest:hover {
-  background: #312e81;
+  background: var(--accent-primary);
   color: #ffffff;
-  box-shadow: 0 0 16px rgba(99, 102, 241, 0.4);
+  box-shadow: 0 0 20px rgba(82, 70, 234, 0.45);
 }
 
 /* VIEWPORT AREA */
@@ -1253,21 +1383,21 @@ body {
   justify-content: center;
   padding: 16px;
   overflow: hidden;
-  background: radial-gradient(circle at center, #11131b 0%, #06070a 100%);
+  background: radial-gradient(circle at center, #11131c 0%, #06070a 100%);
 }
 
 .viewmode-pill {
   position: absolute;
   top: 18px;
   z-index: 30;
-  background: rgba(18, 19, 25, 0.92);
+  background: rgba(16, 18, 26, 0.92);
   backdrop-filter: blur(16px);
   border: 1px solid var(--border-bright);
   padding: 3px;
   border-radius: var(--radius-pill);
   display: flex;
   gap: 2px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.6);
 }
 .tab-pill {
   background: transparent;
@@ -1283,7 +1413,7 @@ body {
 .tab-pill.active {
   background: var(--accent-primary);
   color: #ffffff;
-  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.4);
+  box-shadow: 0 2px 10px rgba(82, 70, 234, 0.4);
 }
 
 /* CANVAS BOUNDS */
@@ -1294,20 +1424,31 @@ body {
   justify-content: center;
   max-width: 100%;
   max-height: calc(100vh - 180px);
-  border-radius: var(--radius-md);
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.85);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.85);
   overflow: hidden;
   background: #000000;
   cursor: ew-resize;
-  transition: transform 0.2s var(--ease-fluid);
+  transition: transform 0.25s var(--ease-fluid), border-radius 0.25s ease;
 }
 .canvas-bounds.zoom-100 {
   cursor: grab;
   transform: scale(1.6);
 }
+.canvas-bounds.crt-curved {
+  transform: perspective(700px) scale(0.96);
+  border-radius: 36px !important;
+  box-shadow: inset 0 0 90px rgba(0,0,0,0.85), 0 0 40px rgba(0,0,0,0.95);
+}
+
+img:not([src]), img[src=""], img[src="#"] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+}
 
 .layer-before {
-  display: block;
+  display: none;
   max-width: 100%;
   max-height: calc(100vh - 180px);
   width: auto;
@@ -1316,6 +1457,7 @@ body {
   opacity: 0;
   transition: opacity 0.2s var(--ease-fluid);
   pointer-events: none;
+  background: transparent;
 }
 .layer-before:not([src]), .layer-after:not([src]) {
   display: none !important;
@@ -1332,16 +1474,30 @@ body {
   pointer-events: none;
 }
 .layer-after {
-  display: block;
+  display: none;
   width: 100%;
   height: 100%;
   object-fit: contain;
   opacity: 0;
   transition: opacity 0.2s var(--ease-fluid);
   will-change: filter;
+  background: transparent;
 }
 
-/* CURTAIN DIVIDER (100% FLUSH TRAVEL WITH DUAL ARROWS) */
+/* RETRO CRT SCANLINE OVERLAY */
+.crt-overlay {
+  position: absolute;
+  top: 0; left: 0; width: 100%; height: 100%;
+  pointer-events: none;
+  z-index: 22;
+  display: none;
+  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.45) 50%),
+              linear-gradient(90deg, rgba(255, 0, 0, 0.05), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.05));
+  background-size: 100% 3px, 6px 100%;
+  box-shadow: inset 0 0 100px rgba(0,0,0,0.6);
+}
+
+/* CURTAIN DIVIDER */
 .curtain-divider {
   position: absolute;
   top: 0;
@@ -1353,15 +1509,15 @@ body {
   z-index: 25;
   display: none;
   pointer-events: none;
-  box-shadow: 0 0 8px rgba(255, 255, 255, 0.6);
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.7);
 }
 .curtain-knob {
   position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   background: #151722;
   border: 2px solid #ffffff;
   border-radius: 50%;
@@ -1372,7 +1528,7 @@ body {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.9);
   pointer-events: all;
   cursor: ew-resize;
-  transition: transform 0.1s ease;
+  transition: transform 0.15s ease;
 }
 .curtain-knob:hover {
   transform: translate(-50%, -50%) scale(1.15);
@@ -1381,34 +1537,36 @@ body {
 
 .tag-badge {
   position: absolute;
-  bottom: 12px;
-  background: rgba(12, 13, 17, 0.85);
-  backdrop-filter: blur(8px);
-  padding: 4px 10px;
-  border-radius: var(--radius-sm);
+  bottom: 14px;
+  background: rgba(12, 14, 20, 0.88);
+  backdrop-filter: blur(10px);
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
   font-size: 11px;
   font-weight: 600;
   z-index: 20;
   border: 1px solid rgba(255, 255, 255, 0.1);
   display: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  pointer-events: none;
 }
-.tag-badge.left { left: 12px; color: var(--text-sub); }
-.tag-badge.right { right: 12px; color: var(--accent-emerald); }
+.tag-badge.left { left: 14px; color: var(--text-sub); }
+.tag-badge.right { right: 14px; color: var(--accent-emerald); }
 
-/* FLOATING CANVAS HUD (ZOOM & DETAIL INSPECTION) */
+/* FLOATING CANVAS HUD */
 .canvas-hud {
   position: absolute;
-  bottom: 16px;
+  bottom: 18px;
   z-index: 30;
-  background: rgba(18, 19, 26, 0.88);
-  backdrop-filter: blur(14px);
+  background: rgba(16, 18, 26, 0.88);
+  backdrop-filter: blur(16px);
   border: 1px solid var(--border-bright);
   padding: 4px 8px;
   border-radius: var(--radius-pill);
   display: flex;
   align-items: center;
   gap: 6px;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+  box-shadow: 0 8px 30px rgba(0,0,0,0.65);
 }
 .btn-hud {
   background: transparent;
@@ -1416,13 +1574,13 @@ body {
   color: var(--text-sub);
   font-size: 11px;
   font-weight: 600;
-  padding: 4px 10px;
+  padding: 5px 12px;
   border-radius: var(--radius-pill);
   cursor: pointer;
   transition: all 0.15s ease;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
 }
 .btn-hud:hover {
   background: var(--bg-input);
@@ -1441,33 +1599,33 @@ body {
   justify-content: center;
   padding: 40px;
   text-align: center;
-  gap: 12px;
+  gap: 14px;
 }
 .empty-icon-wrap {
-  width: 60px;
-  height: 60px;
-  border-radius: 16px;
-  background: #1e1b4b;
-  border: 1px solid #3730a3;
+  width: 64px;
+  height: 64px;
+  border-radius: 18px;
+  background: rgba(82, 70, 234, 0.15);
+  border: 1px solid rgba(82, 70, 234, 0.35);
   display: flex;
   align-items: center;
   justify-content: center;
   margin-bottom: 4px;
 }
 .empty-title {
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 700;
   color: #ffffff;
 }
 .empty-subtitle {
   font-size: 12px;
   color: var(--text-sub);
-  max-width: 380px;
-  line-height: 1.4;
+  max-width: 400px;
+  line-height: 1.5;
 }
 .empty-actions {
   display: flex;
-  gap: 8px;
+  gap: 10px;
   margin-top: 8px;
 }
 
@@ -1479,9 +1637,9 @@ body {
   align-items: center;
   gap: 12px;
   z-index: 40;
-  background: rgba(12, 13, 17, 0.85);
-  backdrop-filter: blur(8px);
-  padding: 20px 28px;
+  background: rgba(12, 14, 20, 0.88);
+  backdrop-filter: blur(12px);
+  padding: 20px 30px;
   border-radius: var(--radius-lg);
   border: 1px solid var(--border-bright);
 }
@@ -1498,12 +1656,12 @@ body {
 /* TIMELINE DECK */
 .timeline-deck {
   height: 56px;
-  padding: 0 18px;
+  padding: 0 20px;
   border-top: 1px solid var(--border-subtle);
   background: var(--bg-surface);
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 16px;
   z-index: 10;
 }
 .deck-buttons {
@@ -1553,8 +1711,8 @@ body {
   font-size: 10px;
   color: var(--text-dim);
   cursor: pointer;
-  padding: 1px 4px;
-  border-radius: 3px;
+  padding: 1px 6px;
+  border-radius: 4px;
 }
 .jump-link:hover { color: var(--accent-cyan); background: var(--bg-input); }
 
@@ -1580,7 +1738,7 @@ body {
 }
 
 /* =========================================================================
-   RIGHT SIDEBAR: STUDIO CONTROLS (DAVINCI GRADE)
+   RIGHT SIDEBAR: STUDIO CONTROLS (LESS EDGY, MORE POLISHED)
    ========================================================================= */
 .sidebar-panel {
   width: 440px;
@@ -1622,21 +1780,22 @@ body {
 
 .studio-scroll {
   flex: 1;
-  padding: 14px;
+  padding: 16px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
 }
 
 .studio-card {
   background: var(--bg-panel);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
-  padding: 12px 14px;
+  padding: 14px;
   display: flex;
   flex-direction: column;
   gap: 10px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
 }
 .card-head {
   display: flex;
@@ -1715,14 +1874,14 @@ body {
   border-color: var(--border-bright);
 }
 .btn-subtle.highlight {
-  border-color: #6366f1;
+  border-color: rgba(82, 70, 234, 0.6);
   color: #c7d2fe;
 }
 
 /* QUICK LOOK PRESET CHIPS */
 .quick-preset-bar {
   display: flex;
-  gap: 5px;
+  gap: 6px;
   overflow-x: auto;
   padding-bottom: 2px;
 }
@@ -1732,7 +1891,7 @@ body {
   color: var(--text-sub);
   font-size: 10px;
   font-weight: 600;
-  padding: 4px 9px;
+  padding: 4px 10px;
   border-radius: var(--radius-pill);
   cursor: pointer;
   white-space: nowrap;
@@ -1883,7 +2042,7 @@ body {
   font-size: 11px;
   font-weight: 600;
   padding: 6px 3px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   text-align: center;
   transition: all 0.15s ease;
@@ -2014,7 +2173,7 @@ body {
 .export-progress-fill {
   width: 0%;
   height: 100%;
-  background: linear-gradient(90deg, #4f46e5, #06b6d4);
+  background: linear-gradient(90deg, #5246ea, #38bdf8);
   border-radius: var(--radius-pill);
   transition: width 0.2s ease-out;
 }
@@ -2037,7 +2196,7 @@ body {
 }
 .btn-primary-export:hover {
   background: var(--accent-primary-hover);
-  box-shadow: 0 4px 16px rgba(79, 70, 229, 0.4);
+  box-shadow: 0 4px 16px rgba(82, 70, 234, 0.4);
 }
 .btn-primary-export.cancel { background: var(--accent-rose); }
 
@@ -2057,7 +2216,7 @@ body {
   background: var(--bg-panel);
   border: 1px solid var(--border-bright);
   border-radius: var(--radius-lg);
-  width: 900px;
+  width: 920px;
   max-width: 95vw;
   max-height: 90vh;
   display: flex;
@@ -2096,7 +2255,7 @@ body {
 .audition-card:hover {
   border-color: var(--accent-primary);
   transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(79, 70, 229, 0.3);
+  box-shadow: 0 8px 24px rgba(82, 70, 234, 0.3);
 }
 .audition-thumb-wrap {
   width: 100%;
@@ -2111,7 +2270,7 @@ body {
 .audition-info { padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; }
 .audition-name-row { display: flex; align-items: center; justify-content: space-between; }
 .audition-name { font-weight: 600; font-size: 12px; color: #ffffff; }
-.audition-tag { font-size: 9px; font-weight: 700; color: var(--accent-cyan); background: #083344; padding: 1px 6px; border-radius: var(--radius-pill); text-transform: uppercase; }
+.audition-tag { font-size: 9px; font-weight: 700; color: var(--accent-cyan); background: rgba(56, 189, 248, 0.15); padding: 1px 6px; border-radius: var(--radius-pill); text-transform: uppercase; }
 .audition-desc { font-size: 11px; color: var(--text-sub); line-height: 1.3; }
 
 /* TOAST */
@@ -2119,7 +2278,7 @@ body {
   position: fixed;
   bottom: 24px;
   left: 24px;
-  background: rgba(18, 19, 26, 0.95);
+  background: rgba(16, 18, 26, 0.95);
   backdrop-filter: blur(12px);
   border: 1px solid var(--border-bright);
   padding: 10px 18px;
@@ -2167,8 +2326,23 @@ body {
             <polyline points="2 12 12 17 22 12"></polyline>
           </svg>
         </div>
-        <div class="brand-title">NeoCel AI Studio</div>
-        <div class="brand-badge">Neural Pro</div>
+        <div class="brand-title" id="lblAppName">NeoCel AI Studio</div>
+        <div class="brand-badge" id="lblAppEdition">Neural Pro</div>
+
+        <!-- FOLDER VIDEO NAVIGATION ARROWS -->
+        <div class="folder-nav-group" id="folderNavGroup" style="display:none;" title="Switch through videos in folder (Shortcuts: [ and ])">
+          <button class="btn-nav-arrow" onclick="prevMedia()" title="Previous Video ([)">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <polyline points="15 18 9 12 15 6"></polyline>
+            </svg>
+          </button>
+          <span class="lbl-nav-counter" id="lblNavCounter">1 / 1</span>
+          <button class="btn-nav-arrow" onclick="nextMedia()" title="Next Video (])">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <polyline points="9 18 15 12 9 6"></polyline>
+            </svg>
+          </button>
+        </div>
       </div>
 
       <div class="topbar-actions">
@@ -2237,11 +2411,14 @@ body {
 
       <!-- CANVAS BOUNDS -->
       <div class="canvas-bounds" id="canvasBounds" style="display:none;">
-        <img class="layer-before" id="imgBefore" onload="onFrameLoaded()" />
+        <img class="layer-before" id="imgBefore" style="display:none;" onload="this.style.display='block'; onFrameLoaded();" onerror="this.style.display='none';" />
         
         <div class="layer-after-clip" id="afterClip">
-          <img class="layer-after" id="imgAfter" />
+          <img class="layer-after" id="imgAfter" style="display:none;" onload="this.style.display='block';" onerror="this.style.display='none';" />
         </div>
+
+        <!-- CRT OVERLAY -->
+        <div class="crt-overlay" id="crtOverlay"></div>
 
         <div class="curtain-divider" id="curtainDivider">
           <div class="curtain-knob">
@@ -2276,14 +2453,14 @@ body {
       <!-- EMPTY STATE (NO MEDIA LOADED) -->
       <div class="empty-viewport" id="emptyViewport">
         <div class="empty-icon-wrap">
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#5246ea" stroke-width="2">
             <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
             <polyline points="2 17 12 22 22 17"></polyline>
             <polyline points="2 12 12 17 22 12"></polyline>
           </svg>
         </div>
         <div class="empty-title">Ready for Remastering</div>
-        <div class="empty-subtitle">Load any anime video or photo (MP4, MKV, AVI, WebM, PNG, JPG, TIFF) to begin neural upscaling and color grading.</div>
+        <div class="empty-subtitle">Load any anime video or photo (MP4, MKV, AVI, WebM, PNG, JPG, TIFF) to begin neural upscaling, 3-way color grading, and CRT/VHS simulation.</div>
         <div class="empty-actions">
           <button class="btn-subtle highlight" onclick="triggerAddFiles()">Browse Files</button>
           <button class="btn-subtle" onclick="triggerAddFolder()">Batch Folder</button>
@@ -2328,8 +2505,9 @@ body {
     <!-- TABS -->
     <nav class="studio-tabs">
       <button class="studio-tab-btn active" onclick="switchSidebarTab('tabColor', this)">Color & Wheels</button>
+      <button class="studio-tab-btn" onclick="switchSidebarTab('tabRetroCRT', this)">Retro CRT/VHS</button>
       <button class="studio-tab-btn" onclick="switchSidebarTab('tabAIUpscale', this)">AI Upscaling</button>
-      <button class="studio-tab-btn" onclick="switchSidebarTab('tabRestoration', this)">AI Clean/Grain</button>
+      <button class="studio-tab-btn" onclick="switchSidebarTab('tabRestoration', this)">Cel Polish</button>
       <button class="studio-tab-btn" onclick="switchSidebarTab('tabGeometry', this)">Geometry</button>
       <button class="studio-tab-btn" onclick="switchSidebarTab('tabBatch', this)">Batch Queue</button>
       <button class="studio-tab-btn" onclick="switchSidebarTab('tabExport', this)">Export</button>
@@ -2365,13 +2543,13 @@ body {
 
       <!-- ONE-CLICK QUICK PRESETS -->
       <div class="studio-card">
-        <div class="card-title">Instant Film & Era Presets</div>
+        <div class="card-title">Instant Film & Era Looks</div>
         <div class="quick-preset-bar">
           <button class="chip-preset" onclick="quickApplyPreset('cel_master')">Cel Master</button>
           <button class="chip-preset" onclick="quickApplyPreset('film_35mm')">35mm Film</button>
           <button class="chip-preset" onclick="quickApplyPreset('ink_sharp')">Ink 4K</button>
           <button class="chip-preset" onclick="quickApplyPreset('hdr_pop')">HDR Pop</button>
-          <button class="chip-preset" onclick="quickApplyPreset('ghibli')">Ghibli Warm</button>
+          <button class="chip-preset" onclick="quickApplyPreset('retro_crt')">90s CRT</button>
           <button class="chip-preset" onclick="quickApplyPreset('oled_clean')">OLED Clean</button>
         </div>
       </div>
@@ -2543,7 +2721,94 @@ body {
 
     </div>
 
-    <!-- TAB 2: AI UPSCALING (REAL-ESRGAN & A/B COMPARE) -->
+    <!-- TAB 2: RETRO CRT & VHS SIMULATION (NEW FEATURE) -->
+    <div class="studio-scroll" id="tabRetroCRT" style="display:none;">
+      
+      <div class="studio-card">
+        <div class="card-head">
+          <span class="card-title">CRT Television Simulation</span>
+          <span style="font-size: 10px; color: var(--accent-amber); font-weight: 700;">ANALOG TUBE HARDWARE</span>
+        </div>
+        <div style="font-size: 11px; color: var(--text-sub); line-height: 1.4;">
+          Authentic vintage CRT television simulation with aperture grille scanlines and curved glass bloom.
+        </div>
+
+        <div class="toggle-row">
+          <div class="toggle-label-wrap">
+            <div class="toggle-title">Aperture Grille Scanlines</div>
+            <div class="toggle-desc">Horizontal phosphor scanline simulation</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="chkCrtScanlines" onchange="onToggleCRTScanlines(this.checked)">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="slider-row">
+          <div class="slider-meta">
+            <span>Scanline Intensity</span>
+            <span class="slider-val" id="valCrtIntensity">35%</span>
+          </div>
+          <input type="range" class="slider-bar" id="slCrtIntensity" min="0.1" max="0.8" step="0.05" value="0.35"
+                 oninput="onCrtIntensityChange(this.value)">
+        </div>
+
+        <div class="toggle-row">
+          <div class="toggle-label-wrap">
+            <div class="toggle-title">Curved Glass Screen (Tube Curvature)</div>
+            <div class="toggle-desc">Authentic spherical barrel distortion of retro monitors</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="chkCrtCurve" onchange="onToggleCRTCurve(this.checked)">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="studio-card">
+        <div class="card-head">
+          <span class="card-title">VHS Tape Analog Emulation</span>
+          <span style="font-size: 10px; color: var(--accent-rose); font-weight: 700;">TAPE ARTIFACTS</span>
+        </div>
+
+        <div class="toggle-row">
+          <div class="toggle-label-wrap">
+            <div class="toggle-title">VHS Tape Analog Mode</div>
+            <div class="toggle-desc">Prism RGB color fringing and analog tape tracking</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="chkVhsMode" onchange="onToggleVHSMode(this.checked)">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="slider-row">
+          <div class="slider-meta">
+            <span>Chromatic Aberration (Prism Fringe)</span>
+            <span class="slider-val" id="valVhsChroma">2.0 px</span>
+          </div>
+          <input type="range" class="slider-bar" id="slVhsChroma" min="1.0" max="6.0" step="0.5" value="2.0"
+                 oninput="onVhsChromaChange(this.value)">
+        </div>
+      </div>
+
+      <div class="studio-card">
+        <div class="card-title">Retro Audio Dialogue Presence</div>
+        <div class="toggle-row">
+          <div class="toggle-label-wrap">
+            <div class="toggle-title">Dialogue Clarity & Tape Hiss Cleanup</div>
+            <div class="toggle-desc">Cleans vintage analog tape hiss and elevates dialogue frequencies</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="chkAudioEQ" onchange="onToggleAudioEQ(this.checked)">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- TAB 3: AI UPSCALING (REAL-ESRGAN & A/B COMPARE) -->
     <div class="studio-scroll" id="tabAIUpscale" style="display:none;">
       
       <div class="studio-card">
@@ -2557,19 +2822,19 @@ body {
 
         <div style="font-size: 10px; color: var(--text-dim); text-transform: uppercase; font-weight: 700; margin-top: 4px;">Upscaling Engine</div>
         <div class="segmented-bar" style="flex-direction: column; gap: 4px; background: transparent; padding: 0;">
-          <button class="seg-btn active" style="text-align: left; padding: 8px 12px; border-radius: 6px; background: var(--bg-input);" onclick="setAIModel('realesr-animevideov3', this)">
+          <button class="seg-btn active" style="text-align: left; padding: 8px 12px; border-radius: 8px; background: var(--bg-input);" onclick="setAIModel('realesr-animevideov3', this)">
             <div style="font-weight: 700; color: #ffffff;">Real-ESRGAN Anime V3 (Neural Reconstruction)</div>
             <div style="font-size: 10px; color: var(--text-sub);">Neural detail reconstruction trained specifically for anime line art</div>
           </button>
-          <button class="seg-btn" style="text-align: left; padding: 8px 12px; border-radius: 6px; background: var(--bg-input);" onclick="setAIModel('realesrgan-x4plus-anime', this)">
+          <button class="seg-btn" style="text-align: left; padding: 8px 12px; border-radius: 8px; background: var(--bg-input);" onclick="setAIModel('realesrgan-x4plus-anime', this)">
             <div style="font-weight: 700; color: #ffffff;">Real-ESRGAN 6B Anime Cel (Max Redraw)</div>
             <div style="font-size: 10px; color: var(--text-sub);">Deep convolutional neural model for vintage 480p/576p cels</div>
           </button>
-          <button class="seg-btn" style="text-align: left; padding: 8px 12px; border-radius: 6px; background: var(--bg-input);" onclick="setAIModel('lanczos', this)">
+          <button class="seg-btn" style="text-align: left; padding: 8px 12px; border-radius: 8px; background: var(--bg-input);" onclick="setAIModel('lanczos', this)">
             <div style="font-weight: 700; color: #ffffff;">Lanczos-3 Sinc (150+ FPS Fast Scaler)</div>
             <div style="font-size: 10px; color: var(--text-sub);">Ultra-fast mathematical interpolation + AMD CAS sharpening</div>
           </button>
-          <button class="seg-btn" style="text-align: left; padding: 8px 12px; border-radius: 6px; background: var(--bg-input);" onclick="setAIModel('spline36', this)">
+          <button class="seg-btn" style="text-align: left; padding: 8px 12px; border-radius: 8px; background: var(--bg-input);" onclick="setAIModel('spline36', this)">
             <div style="font-weight: 700; color: #ffffff;">Spline36 (Crisp Outlines)</div>
             <div style="font-size: 10px; color: var(--text-sub);">Mathematical spline curve outline preservation</div>
           </button>
@@ -2592,9 +2857,36 @@ body {
 
     </div>
 
-    <!-- TAB 3: AI CLEAN & GRAIN -->
+    <!-- TAB 4: CEL RESTORATION & LINE ART -->
     <div class="studio-scroll" id="tabRestoration" style="display:none;">
       
+      <div class="studio-card">
+        <div class="card-head">
+          <span class="card-title">Ink Density & Cel Deflicker</span>
+          <span style="font-size: 10px; color: var(--accent-cyan); font-weight: 700;">PRO CEL TOOLS</span>
+        </div>
+
+        <div class="slider-row">
+          <div class="slider-meta">
+            <span>Line Art Darkener (Ink Infill)</span>
+            <span class="slider-val" id="valLineDarken">0.00</span>
+          </div>
+          <input type="range" class="slider-bar" id="slLineDarken" min="0" max="1" step="0.05" value="0.00"
+                 oninput="onParamChangeLive('line_darken', this.value, 'valLineDarken')">
+        </div>
+
+        <div class="toggle-row">
+          <div class="toggle-label-wrap">
+            <div class="toggle-title">Temporal Cel Deflicker</div>
+            <div class="toggle-desc">Eliminates uneven physical lighting exposure flicker across static cels</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="chkCelDeflicker" onchange="onToggleParam('cel_deflicker', this.checked)">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+
       <div class="studio-card">
         <div class="card-title">AI Denoise & Film Grain</div>
         
@@ -2656,7 +2948,7 @@ body {
 
     </div>
 
-    <!-- TAB 4: GEOMETRY & FRAMING -->
+    <!-- TAB 5: GEOMETRY & FRAMING -->
     <div class="studio-scroll" id="tabGeometry" style="display:none;">
       
       <div class="studio-card">
@@ -2682,7 +2974,7 @@ body {
 
     </div>
 
-    <!-- TAB 5: BATCH PROCESSING QUEUE -->
+    <!-- TAB 6: BATCH PROCESSING QUEUE -->
     <div class="studio-scroll" id="tabBatch" style="display:none;">
       
       <div class="studio-card">
@@ -2704,7 +2996,7 @@ body {
 
     </div>
 
-    <!-- TAB 6: EXPORT -->
+    <!-- TAB 7: EXPORT -->
     <div class="studio-scroll" id="tabExport" style="display:none;">
       
       <div class="studio-card" id="cardTrimControls">
@@ -2812,7 +3104,7 @@ body {
     <div class="modal-body" id="auditionGrid">
       <div style="grid-column: 1 / -1; display: flex; align-items: center; justify-content: center; height: 260px; color: var(--text-sub); gap: 12px;">
         <div class="spinner-ring"></div>
-        <span>Extracting 6 AI remaster looks in parallel...</span>
+        <span>Rendering 6 AI remaster treatments...</span>
       </div>
     </div>
   </div>
@@ -2863,14 +3155,23 @@ let state = {
     delete_original: false,
     lift_r: 0.0, lift_g: 0.0, lift_b: 0.0, lift_master: 0.0,
     gamma_r: 0.0, gamma_g: 0.0, gamma_b: 0.0, gamma_master: 0.0,
-    gain_r: 0.0, gain_g: 0.0, gain_b: 0.0, gain_master: 0.0
+    gain_r: 0.0, gain_g: 0.0, gain_b: 0.0, gain_master: 0.0,
+    crt_scanlines: false,
+    crt_intensity: 0.35,
+    crt_curve: false,
+    vhs_mode: false,
+    vhs_chroma: 2.0,
+    line_darken: 0.0,
+    cel_deflicker: false,
+    audio_eq: false
   },
   viewMode: 'split',
   isEncoding: false,
   debounceTimer: null,
   activeWheel: null,
   isCurtainDragging: false,
-  isZoomed: false
+  isZoomed: false,
+  auditionCards: []
 };
 
 // =========================================================================
@@ -2880,6 +3181,12 @@ window.addEventListener('pywebviewready', async () => {
   let init = await window.pywebview.api.get_initial_state();
   state.queue = init.queue || [];
   state.activeIndex = init.active_index;
+  
+  if (init.branding) {
+    if (init.branding.app_name) document.getElementById('lblAppName').innerText = init.branding.app_name;
+    if (init.branding.app_edition) document.getElementById('lblAppEdition').innerText = init.branding.app_edition;
+  }
+
   if (state.activeIndex >= 0) {
     selectMedia(state.activeIndex);
   } else {
@@ -2888,8 +3195,10 @@ window.addEventListener('pywebviewready', async () => {
     document.getElementById('canvasBounds').style.display = 'none';
     document.getElementById('viewModePill').style.display = 'none';
     document.getElementById('canvasHud').style.display = 'none';
+    document.getElementById('folderNavGroup').style.display = 'none';
   }
   setupCurtainDivider();
+  setupKeyboardShortcuts();
   updateBatchQueueUI();
 });
 
@@ -2898,6 +3207,48 @@ function showToast(msg) {
   document.getElementById('toastText').innerText = msg;
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 3500);
+}
+
+// =========================================================================
+// FOLDER NAVIGATION (SWITCH VIDEOS IN ACTIVE FOLDER)
+// =========================================================================
+function updateFolderNav() {
+  let group = document.getElementById('folderNavGroup');
+  let counter = document.getElementById('lblNavCounter');
+  if (state.queue.length > 0) {
+    group.style.display = 'flex';
+    counter.innerText = `${state.activeIndex + 1} / ${state.queue.length}`;
+  } else {
+    group.style.display = 'none';
+  }
+}
+
+function prevMedia() {
+  if (state.queue.length <= 1) return;
+  let nextIdx = state.activeIndex - 1;
+  if (nextIdx < 0) nextIdx = state.queue.length - 1;
+  selectMedia(nextIdx);
+  showToast(`Switched: ${state.queue[nextIdx].filename}`);
+}
+
+function nextMedia() {
+  if (state.queue.length <= 1) return;
+  let nextIdx = (state.activeIndex + 1) % state.queue.length;
+  selectMedia(nextIdx);
+  showToast(`Switched: ${state.queue[nextIdx].filename}`);
+}
+
+function setupKeyboardShortcuts() {
+  window.addEventListener('keydown', (e) => {
+    if (e.target.tagName === 'INPUT') return;
+    if (e.key === '[' || (e.altKey && e.key === 'ArrowLeft')) {
+      prevMedia();
+    } else if (e.key === ']' || (e.altKey && e.key === 'ArrowRight')) {
+      nextMedia();
+    } else if (e.key === 'f' || e.key === 'F11') {
+      toggleFullscreen();
+    }
+  });
 }
 
 function selectMedia(idx) {
@@ -2916,6 +3267,7 @@ function selectMedia(idx) {
   document.getElementById('valMetaRes').innerText = `${item.width}x${item.height} (${item.dar})`;
   document.getElementById('valMetaCodec').innerText = `${item.video_codec.toUpperCase()} / ${item.fps} fps`;
 
+  updateFolderNav();
   updateResolutionTags();
 
   let scrubber = document.getElementById('timelineScrubber');
@@ -3033,6 +3385,54 @@ function updateLiveGPUGrade() {
 }
 
 // =========================================================================
+// RETRO CRT & VHS SIMULATION (INTERACTIVE GPU TOGGLES)
+// =========================================================================
+function onToggleCRTScanlines(checked) {
+  state.settings.crt_scanlines = checked;
+  const overlay = document.getElementById('crtOverlay');
+  overlay.style.display = checked ? 'block' : 'none';
+  showToast(checked ? "CRT Scanlines enabled" : "CRT Scanlines disabled");
+}
+
+function onCrtIntensityChange(val) {
+  val = parseFloat(val);
+  state.settings.crt_intensity = val;
+  document.getElementById('valCrtIntensity').innerText = `${Math.round(val * 100)}%`;
+  const overlay = document.getElementById('crtOverlay');
+  overlay.style.opacity = (val * 1.5).toString();
+}
+
+function onToggleCRTCurve(checked) {
+  state.settings.crt_curve = checked;
+  const bounds = document.getElementById('canvasBounds');
+  if (checked) bounds.classList.add('crt-curved');
+  else bounds.classList.remove('crt-curved');
+  showToast(checked ? "Curved glass tube monitor enabled" : "Flat canvas enabled");
+}
+
+function onToggleVHSMode(checked) {
+  state.settings.vhs_mode = checked;
+  const imgAfter = document.getElementById('imgAfter');
+  if (checked) {
+    imgAfter.classList.add('vhs-jitter');
+    showToast("VHS Analog Tape Mode active");
+  } else {
+    imgAfter.classList.remove('vhs-jitter');
+  }
+}
+
+function onVhsChromaChange(val) {
+  val = parseFloat(val);
+  state.settings.vhs_chroma = val;
+  document.getElementById('valVhsChroma').innerText = `${val.toFixed(1)} px`;
+}
+
+function onToggleAudioEQ(checked) {
+  state.settings.audio_eq = checked;
+  showToast(checked ? "Audio dialogue presence & hiss filter enabled" : "Audio filter disabled");
+}
+
+// =========================================================================
 // FRAME RENDERING (HIGH-PRECISION BACKGROUND SYNC)
 // =========================================================================
 async function refreshFrame() {
@@ -3047,8 +3447,8 @@ async function refreshFrame() {
     if (res && res.model_a && res.model_b) {
       let imgB = document.getElementById('imgBefore');
       let imgA = document.getElementById('imgAfter');
-      imgB.src = res.model_b; // Lanczos
-      imgA.src = res.model_a; // Real-ESRGAN
+      imgB.src = res.model_b;
+      imgA.src = res.model_a;
       document.getElementById('tagSource').innerText = res.name_b;
       document.getElementById('tagRemaster').innerText = res.name_a;
       document.getElementById('lblFrameTech').innerText = "A/B Neural vs Traditional Scaler Compare";
@@ -3063,7 +3463,7 @@ async function refreshFrame() {
     let imgA = document.getElementById('imgAfter');
     imgB.src = res.before;
     imgA.src = res.after;
-    imgA.style.filter = 'none'; // Clear live shader once bit-perfect frame is rendered
+    imgA.style.filter = 'none';
     let modelTag = state.settings.ai_model.includes('realesr') ? 'Real-ESRGAN AI' : 'Lanczos-3 + CAS';
     document.getElementById('lblFrameTech').innerText = `${res.width}x${res.height} ${modelTag} (${res.timestamp})`;
     updateResolutionTags();
@@ -3100,8 +3500,30 @@ function setCurtainPos(pct) {
   const divider = document.getElementById('curtainDivider');
   const afterClip = document.getElementById('afterClip');
 
-  divider.style.left = `${pct}%`;
-  afterClip.style.clipPath = `inset(0 0 0 ${pct}%)`;
+  if (divider) divider.style.left = `${pct}%`;
+  if (afterClip) afterClip.style.clipPath = `inset(0 0 0 ${pct}%)`;
+
+  // Auto-fade badges if curtain handle approaches them to prevent overlapping/clipping
+  const tagL = document.getElementById('tagSource');
+  const tagR = document.getElementById('tagRemaster');
+  if (tagL) {
+    if (pct < 18) {
+      tagL.style.opacity = '0';
+      tagL.style.transform = 'translateY(6px)';
+    } else {
+      tagL.style.opacity = '1';
+      tagL.style.transform = 'translateY(0)';
+    }
+  }
+  if (tagR) {
+    if (pct > 82) {
+      tagR.style.opacity = '0';
+      tagR.style.transform = 'translateY(6px)';
+    } else {
+      tagR.style.opacity = '1';
+      tagR.style.transform = 'translateY(0)';
+    }
+  }
 }
 
 function setupCurtainDivider() {
@@ -3197,7 +3619,7 @@ function startWheelDrag(e, wheelType) {
   const onMouseMove = (ev) => {
     if (state.activeWheel) {
       updateWheelPosition(ev, state.activeWheel);
-      updateLiveGPUGrade(); // Instant 60fps GPU feedback!
+      updateLiveGPUGrade();
     }
   };
   const onMouseUp = () => {
@@ -3205,7 +3627,6 @@ function startWheelDrag(e, wheelType) {
     window.removeEventListener('mousemove', onMouseMove);
     window.removeEventListener('mouseup', onMouseUp);
     
-    // High-precision debounced sync to backend
     clearTimeout(state.debounceTimer);
     state.debounceTimer = setTimeout(() => {
       refreshFrame();
@@ -3255,7 +3676,7 @@ function updateWheelPosition(e, type) {
 function onWheelMasterLive(type, val) {
   val = parseFloat(val);
   state.settings[`${type}_master`] = val;
-  updateLiveGPUGrade(); // Instant 60fps GPU feedback!
+  updateLiveGPUGrade();
   
   clearTimeout(state.debounceTimer);
   state.debounceTimer = setTimeout(() => {
@@ -3297,13 +3718,12 @@ function onParamChangeLive(key, val, lblId) {
     else if (key === 'temp' || key === 'tint') document.getElementById(lblId).innerText = `${val > 0 ? '+' : ''}${val}`;
     else if (key === 'lut_intensity') document.getElementById(lblId).innerText = `${Math.round(val * 100)}%`;
     else if (key === 'cq') document.getElementById(lblId).innerText = `${val} (${val <= 18 ? 'Master' : 'High Quality'})`;
+    else if (key === 'line_darken') document.getElementById(lblId).innerText = val.toFixed(2);
     else document.getElementById(lblId).innerText = val.toFixed(key === 'brightness' ? 3 : 2);
   }
 
-  // Instant GPU Shader Update (Zero delay!)
   updateLiveGPUGrade();
 
-  // Debounced backend precision sync
   clearTimeout(state.debounceTimer);
   state.debounceTimer = setTimeout(() => {
     refreshFrame();
@@ -3320,12 +3740,12 @@ function onToggleParam(key, checked) {
 // =========================================================================
 function quickApplyPreset(presetId) {
   let presets = {
-    cel_master: {"contrast": 1.140, "brightness": -0.018, "gamma": 0.880, "saturation": 1.260, "sharpness": 0.80, "denoise": 3.0, "temp": 0, "exposure": 0.0},
-    film_35mm: {"contrast": 1.080, "brightness": -0.010, "gamma": 0.940, "saturation": 1.120, "sharpness": 0.50, "denoise": 1.5, "temp": 14, "exposure": 0.0},
-    ink_sharp: {"contrast": 1.180, "brightness": -0.020, "gamma": 0.860, "saturation": 1.220, "sharpness": 1.00, "denoise": 4.5, "temp": 0, "exposure": 0.0},
-    hdr_pop: {"contrast": 1.250, "brightness": -0.028, "gamma": 0.840, "saturation": 1.380, "sharpness": 0.85, "denoise": 2.5, "temp": 0, "exposure": 0.1},
-    ghibli: {"contrast": 1.100, "brightness": 0.005, "gamma": 0.920, "saturation": 1.300, "sharpness": 0.65, "denoise": 2.0, "temp": 20, "exposure": 0.0},
-    oled_clean: {"contrast": 1.160, "brightness": -0.015, "gamma": 0.880, "saturation": 1.180, "sharpness": 0.80, "denoise": 3.5, "temp": -10, "exposure": 0.0}
+    cel_master: {"contrast": 1.140, "brightness": -0.018, "gamma": 0.880, "saturation": 1.260, "sharpness": 0.80, "denoise": 3.0, "temp": 0, "exposure": 0.0, "crt_scanlines": false, "vhs_mode": false},
+    film_35mm: {"contrast": 1.080, "brightness": -0.010, "gamma": 0.940, "saturation": 1.120, "sharpness": 0.50, "denoise": 1.5, "temp": 14, "exposure": 0.0, "crt_scanlines": false, "vhs_mode": false},
+    ink_sharp: {"contrast": 1.180, "brightness": -0.020, "gamma": 0.860, "saturation": 1.220, "sharpness": 1.00, "denoise": 4.5, "temp": 0, "exposure": 0.0, "crt_scanlines": false, "vhs_mode": false},
+    hdr_pop: {"contrast": 1.250, "brightness": -0.028, "gamma": 0.840, "saturation": 1.380, "sharpness": 0.85, "denoise": 2.5, "temp": 0, "exposure": 0.1, "crt_scanlines": false, "vhs_mode": false},
+    retro_crt: {"contrast": 1.120, "brightness": 0.005, "gamma": 0.900, "saturation": 1.320, "sharpness": 0.60, "denoise": 2.0, "temp": 8, "exposure": 0.0, "crt_scanlines": true, "vhs_mode": false},
+    oled_clean: {"contrast": 1.160, "brightness": -0.015, "gamma": 0.880, "saturation": 1.180, "sharpness": 0.80, "denoise": 3.5, "temp": -10, "exposure": 0.0, "crt_scanlines": false, "vhs_mode": false}
   };
 
   let p = presets[presetId];
@@ -3347,8 +3767,13 @@ function quickApplyPreset(presetId) {
   document.getElementById('slExposure').value = p.exposure;
   document.getElementById('valExposure').innerText = `${p.exposure.toFixed(2)} EV`;
 
+  if (p.crt_scanlines !== undefined) {
+    document.getElementById('chkCrtScanlines').checked = p.crt_scanlines;
+    onToggleCRTScanlines(p.crt_scanlines);
+  }
+
   updateLiveGPUGrade();
-  showToast(`Applied preset: ${presetId.toUpperCase()}`);
+  showToast(`Applied: ${presetId.toUpperCase()}`);
   refreshFrame();
 }
 
@@ -3534,7 +3959,8 @@ function resetSlidersToDefault() {
   let defs = {
     contrast: 1.140, brightness: -0.018, gamma: 0.880, saturation: 1.260, sharpness: 0.800,
     exposure: 0.0, temp: 0, tint: 0, denoise: 3.0, grain: 0.0, deband: true, edge_clean: true,
-    deinterlace: false, lut_mode: "none", lut_intensity: 1.0
+    deinterlace: false, lut_mode: "none", lut_intensity: 1.0, crt_scanlines: false, vhs_mode: false,
+    line_darken: 0.0, cel_deflicker: false, audio_eq: false
   };
   for (let k in defs) state.settings[k] = defs[k];
 
@@ -3556,7 +3982,17 @@ function resetSlidersToDefault() {
   document.getElementById('valDenoise').innerText = "3.0";
   document.getElementById('slGrain').value = 0.0;
   document.getElementById('valGrain').innerText = "0.00";
+  document.getElementById('slLineDarken').value = 0.0;
+  document.getElementById('valLineDarken').innerText = "0.00";
+  document.getElementById('chkCrtScanlines').checked = false;
+  document.getElementById('chkCrtCurve').checked = false;
+  document.getElementById('chkVhsMode').checked = false;
+  document.getElementById('chkCelDeflicker').checked = false;
+  document.getElementById('chkAudioEQ').checked = false;
 
+  onToggleCRTScanlines(false);
+  onToggleCRTCurve(false);
+  onToggleVHSMode(false);
   resetColorWheels();
   updateLiveGPUGrade();
   showToast("Restored all sliders to calibrated defaults");
@@ -3564,7 +4000,7 @@ function resetSlidersToDefault() {
 }
 
 // =========================================================================
-// VISUAL AUDITION MODAL (SUGGEST ENHANCEMENTS)
+// VISUAL AUDITION MODAL (SUGGEST ENHANCEMENTS - BUG FIXED)
 // =========================================================================
 async function openAuditionModal() {
   if (state.activeIndex < 0) {
@@ -3578,14 +4014,16 @@ async function openAuditionModal() {
   grid.innerHTML = `
     <div style="grid-column: 1 / -1; display: flex; align-items: center; justify-content: center; height: 260px; color: var(--text-sub); gap: 12px;">
       <div class="spinner-ring"></div>
-      <span>Extracting 6 AI remaster looks in parallel...</span>
+      <span>Rendering 6 AI remaster treatments...</span>
     </div>
   `;
 
   let cards = await window.pywebview.api.get_preset_auditions(state.currentSec);
+  state.auditionCards = cards || [];
+  
   if (cards && cards.length) {
-    grid.innerHTML = cards.map(c => `
-      <div class="audition-card" onclick='applyAuditionProfile(${JSON.stringify(c.settings)}, "${c.name}")'>
+    grid.innerHTML = cards.map((c, idx) => `
+      <div class="audition-card" onclick="applyAuditionByIndex(${idx})">
         <div class="audition-thumb-wrap">
           <img class="audition-thumb" src="${c.thumb}" />
         </div>
@@ -3599,12 +4037,18 @@ async function openAuditionModal() {
       </div>
     `).join('');
   } else {
-    grid.innerHTML = `<div style="grid-column: 1 / -1; text-align: center; color: var(--text-dim);">Could not render presets</div>`;
+    grid.innerHTML = `<div style="grid-column: 1 / -1; text-align: center; color: var(--text-dim); padding: 40px;">Could not render presets on current frame</div>`;
   }
 }
 
 function closeAuditionModal() {
   document.getElementById('auditionModal').style.display = 'none';
+}
+
+function applyAuditionByIndex(idx) {
+  if (!state.auditionCards || !state.auditionCards[idx]) return;
+  let card = state.auditionCards[idx];
+  applyAuditionProfile(card.settings, card.name);
 }
 
 function applyAuditionProfile(settings, name) {
@@ -3641,6 +4085,10 @@ function applyAuditionProfile(settings, name) {
   if (settings.temp !== undefined) {
     document.getElementById('slTemp').value = settings.temp;
     document.getElementById('valTemp').innerText = `${settings.temp > 0 ? '+' : ''}${settings.temp}`;
+  }
+  if (settings.crt_scanlines !== undefined) {
+    document.getElementById('chkCrtScanlines').checked = settings.crt_scanlines;
+    onToggleCRTScanlines(settings.crt_scanlines);
   }
 
   closeAuditionModal();
@@ -3760,14 +4208,16 @@ def start_app():
     if not os.path.exists(icon_path):
         icon_path = os.path.join(get_base_dir(), "AnimeRemasterStudio", "neocel_icon.ico")
 
+    window_title = BRANDING.get("window_title", "NeoCel AI Studio Pro - Universal Anime & Film Restoration 2026")
+
     window = webview.create_window(
-        title="NeoCel AI Studio Pro - Universal Anime & Film Restoration 2026",
+        title=window_title,
         html=HTML_UI,
         js_api=backend,
-        width=1460,
-        height=940,
+        width=1480,
+        height=950,
         min_size=(1140, 750),
-        background_color="#0a0b0f"
+        background_color="#090a0f"
     )
     webview.start(debug=False)
 
