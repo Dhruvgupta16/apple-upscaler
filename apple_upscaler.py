@@ -51,7 +51,7 @@ def load_branding():
         "app_edition": "Neural Pro",
         "app_version": "2.2.0",
         "app_tagline": "Universal Anime & Film Neural Remastering Studio",
-        "window_title": "NeoCel AI Studio Pro - Universal Anime & Film Restoration 2026",
+        "window_title": "Apple Upscaler Pro - Universal Anime & Film AI Remaster",
         "author": "Community Open-Source",
         "license": "MIT"
     }
@@ -160,6 +160,7 @@ def probe_media(file_path):
         info = {
             "path": file_path,
             "filename": os.path.basename(file_path),
+            "name": os.path.basename(file_path),
             "size_mb": round(os.path.getsize(file_path) / (1024 * 1024), 2),
             "duration": duration,
             "is_image": is_image,
@@ -276,6 +277,14 @@ class UniversalStudioBackend:
         candidate_dirs = [app_dir]
         if parent_dir and os.path.exists(parent_dir) and parent_dir != app_dir:
             candidate_dirs.append(parent_dir)
+        for extra in [
+            os.path.join(parent_dir, "apple upscaler studio"),
+            os.path.join(app_dir, "apple upscaler studio"),
+            r"C:\Users\dhruv\Downloads\apple upscaler studio",
+            os.getcwd()
+        ]:
+            if os.path.exists(extra) and extra not in candidate_dirs:
+                candidate_dirs.append(extra)
         
         # Auto-discover video files directly in project directories
         for d in candidate_dirs:
@@ -1213,24 +1222,26 @@ HTML_UI = """<!DOCTYPE html>
 <title>Apple Upscaler Pro</title>
 <style>
 :root {
-  --bg-app: #090a0f;
-  --bg-surface: #10121a;
-  --bg-panel: #161824;
-  --bg-elevated: #1c1f2e;
-  --bg-input: #232738;
-  --border-subtle: rgba(255, 255, 255, 0.07);
-  --border-bright: rgba(255, 255, 255, 0.14);
+  --bg-app: #0c090a;
+  --bg-surface: #140d10;
+  --bg-panel: #1a1115;
+  --bg-elevated: #24161c;
+  --bg-input: #2e1a22;
+  --border-subtle: rgba(244, 63, 94, 0.12);
+  --border-bright: rgba(244, 63, 94, 0.28);
   
   --accent-primary: #e11d48;
   --accent-primary-hover: #f43f5e;
+  --accent-glow: rgba(225, 29, 72, 0.35);
+  --accent-ruby: #fb7185;
   --accent-cyan: #38bdf8;
   --accent-emerald: #10b981;
   --accent-amber: #f59e0b;
   --accent-rose: #f43f5e;
   
-  --text-main: #f8fafc;
-  --text-sub: #94a3b8;
-  --text-dim: #64748b;
+  --text-main: #fff1f2;
+  --text-sub: #fda4af;
+  --text-dim: #9f7582;
   
   --font-sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, system-ui, sans-serif;
   --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
@@ -1500,16 +1511,86 @@ img:not([src]), img[src=""], img[src="#"] {
 }
 
 /* RETRO CRT SCANLINE OVERLAY */
+/* AUTHENTIC TRINITRON APERTURE GRILLE & PHOSPHOR TRIAD CRT OVERLAY */
 .crt-overlay {
   position: absolute;
   top: 0; left: 0; width: 100%; height: 100%;
   pointer-events: none;
   z-index: 22;
   display: none;
-  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.45) 50%),
-              linear-gradient(90deg, rgba(255, 0, 0, 0.05), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.05));
-  background-size: 100% 3px, 6px 100%;
-  box-shadow: inset 0 0 100px rgba(0,0,0,0.6);
+  background: 
+    linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.55) 50%),
+    linear-gradient(90deg, rgba(255, 0, 0, 0.08), rgba(0, 255, 0, 0.04), rgba(0, 0, 255, 0.08));
+  background-size: 100% 3px, 3px 100%;
+  box-shadow: inset 0 0 90px rgba(0, 0, 0, 0.7);
+}
+
+.crt-curved {
+  border-radius: 18px !important;
+  box-shadow: inset 0 0 120px rgba(0, 0, 0, 0.85), 0 0 35px rgba(0, 0, 0, 0.9) !important;
+  transform: perspective(600px) scale(0.985);
+  overflow: hidden !important;
+}
+
+/* AUTHENTIC NTSC VHS HELICAL SCAN HEAD-SWITCHING TRACKING BAND */
+.vhs-tracking-band {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 22px;
+  pointer-events: none;
+  z-index: 23;
+  display: none;
+  background: repeating-linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.45) 0px,
+    rgba(20, 20, 20, 0.90) 3px,
+    rgba(220, 220, 220, 0.60) 7px,
+    rgba(10, 10, 10, 0.85) 12px,
+    rgba(255, 255, 255, 0.70) 16px,
+    rgba(30, 30, 30, 0.95) 22px
+  );
+  mix-blend-mode: hard-light;
+  animation: vhsHeadSwitching 0.12s steps(4) infinite alternate;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.8);
+  opacity: 0.85;
+}
+
+@keyframes vhsHeadSwitching {
+  0% { transform: translateY(0px) scaleX(1.0); filter: contrast(200%) brightness(120%); }
+  50% { transform: translateY(-2px) scaleX(1.02); filter: contrast(180%) brightness(140%); }
+  100% { transform: translateY(1px) scaleX(0.98); filter: contrast(240%) brightness(110%); }
+}
+
+.vhs-jitter {
+  animation: ntscTapeJitter 0.18s steps(2) infinite;
+}
+
+@keyframes ntscTapeJitter {
+  0% { transform: translate(0, 0); }
+  25% { transform: translate(-0.75px, 0.25px); }
+  50% { transform: translate(0.5px, -0.25px); }
+  75% { transform: translate(-0.25px, 0); }
+  100% { transform: translate(0.5px, 0); }
+}
+
+.select-nav-media {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-main);
+  font-size: 11px;
+  font-weight: 500;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  outline: none;
+  cursor: pointer;
+  max-width: 220px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.select-nav-media:hover, .select-nav-media:focus {
+  border-color: var(--accent-primary);
 }
 
 /* CURTAIN DIVIDER */
@@ -1894,16 +1975,42 @@ img:not([src]), img[src=""], img[src="#"] {
 }
 
 /* QUICK LOOK PRESET CHIPS */
+
+/* GLOBAL CUSTOM DARK SCROLLBAR - NO WHITE OS TRACKS */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(225, 29, 72, 0.3) transparent;
+}
+::-webkit-scrollbar {
+  width: 4px !important;
+  height: 4px !important;
+}
+::-webkit-scrollbar-track {
+  background: transparent !important;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(225, 29, 72, 0.25) !important;
+  border-radius: 4px !important;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(225, 29, 72, 0.55) !important;
+}
+
+/* QUICK LOOK PRESET CHIPS - ZERO SCROLLBAR */
 .quick-preset-bar {
   display: flex;
   gap: 8px;
   overflow-x: auto;
-  padding-bottom: 4px;
-  scrollbar-width: none; /* Firefox */
-  -ms-overflow-style: none; /* IE/Edge */
+  overflow-y: hidden;
+  padding-bottom: 2px;
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
 }
 .quick-preset-bar::-webkit-scrollbar {
-  display: none; /* Chrome / EdgeChromium */
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  background: transparent !important;
 }
 .chip-preset {
   background: var(--bg-input);
@@ -2156,7 +2263,7 @@ img:not([src]), img[src=""], img[src="#"] {
   background: var(--bg-elevated);
   color: var(--text-dim);
 }
-.queue-status-badge.processing { background: #1e1b4b; color: #a5b4fc; }
+.queue-status-badge.processing { background: #3b111c; color: #fecdd3; }
 .queue-status-badge.done { background: #064e3b; color: #6ee7b7; }
 
 /* SIDEBAR DOCK */
@@ -2381,13 +2488,14 @@ img:not([src]), img[src=""], img[src="#"] {
         <div class="brand-title" id="lblAppName">Apple Upscaler</div>
         <div class="brand-badge" id="lblAppEdition" style="background: rgba(225, 29, 72, 0.2); border: 1px solid rgba(225, 29, 72, 0.4); color: #fb7185;">Neural Pro</div>
 
-        <!-- FOLDER VIDEO NAVIGATION ARROWS -->
+        <!-- FOLDER VIDEO NAVIGATION & SWITCHER -->
         <div class="folder-nav-group" id="folderNavGroup" style="display:none;" title="Switch through videos in folder (Shortcuts: [ and ])">
           <button class="btn-nav-arrow" onclick="prevMedia()" title="Previous Video ([)">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
               <polyline points="15 18 9 12 15 6"></polyline>
             </svg>
           </button>
+          <select class="select-nav-media" id="selActiveMedia" onchange="selectMedia(parseInt(this.value))" title="Select active video"></select>
           <span class="lbl-nav-counter" id="lblNavCounter">1 / 1</span>
           <button class="btn-nav-arrow" onclick="nextMedia()" title="Next Video (])">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -3228,32 +3336,47 @@ let state = {
 };
 
 // =========================================================================
-// INITIALIZATION
+// INITIALIZATION (DUAL HOOK TO PREVENT WEBVIEW READY RACE CONDITION)
 // =========================================================================
-window.addEventListener('pywebviewready', async () => {
-  let init = await window.pywebview.api.get_initial_state();
-  state.queue = init.queue || [];
-  state.activeIndex = init.active_index;
-  
-  if (init.branding) {
-    if (init.branding.app_name) document.getElementById('lblAppName').innerText = init.branding.app_name;
-    if (init.branding.app_edition) document.getElementById('lblAppEdition').innerText = init.branding.app_edition;
-  }
+async function startApp() {
+  try {
+    let init = await window.pywebview.api.get_initial_state();
+    state.queue = init.queue || [];
+    state.activeIndex = init.active_index;
+    
+    if (init.branding) {
+      if (init.branding.app_name) document.getElementById('lblAppName').innerText = init.branding.app_name;
+      if (init.branding.app_edition) document.getElementById('lblAppEdition').innerText = init.branding.app_edition;
+    }
 
-  if (state.activeIndex >= 0) {
-    selectMedia(state.activeIndex);
-  } else {
-    document.getElementById('frameLoader').style.display = 'none';
-    document.getElementById('emptyViewport').style.display = 'flex';
-    document.getElementById('canvasBounds').style.display = 'none';
-    document.getElementById('viewModePill').style.display = 'none';
-    document.getElementById('canvasHud').style.display = 'none';
-    document.getElementById('folderNavGroup').style.display = 'none';
+    setupCurtainDivider();
+    setupKeyboardShortcuts();
+    updateBatchQueueUI();
+    updateFolderNav();
+
+    if (state.activeIndex >= 0 && state.queue.length > 0) {
+      await selectMedia(state.activeIndex);
+    } else {
+      let loader = document.getElementById('frameLoader');
+      if (loader) loader.style.display = 'none';
+      document.getElementById('emptyViewport').style.display = 'flex';
+      document.getElementById('canvasBounds').style.display = 'none';
+      document.getElementById('viewModePill').style.display = 'none';
+      document.getElementById('canvasHud').style.display = 'none';
+      document.getElementById('folderNavGroup').style.display = 'none';
+    }
+  } catch (err) {
+    console.error("Initialization error:", err);
+    let loader = document.getElementById('frameLoader');
+    if (loader) loader.style.display = 'none';
   }
-  setupCurtainDivider();
-  setupKeyboardShortcuts();
-  updateBatchQueueUI();
-});
+}
+
+if (window.pywebview && window.pywebview.api) {
+  startApp();
+} else {
+  window.addEventListener('pywebviewready', startApp);
+}
 
 function showToast(msg) {
   let t = document.getElementById('toastMsg');
@@ -3268,11 +3391,17 @@ function showToast(msg) {
 function updateFolderNav() {
   let group = document.getElementById('folderNavGroup');
   let counter = document.getElementById('lblNavCounter');
-  if (state.queue.length > 0) {
-    group.style.display = 'flex';
-    counter.innerText = `${state.activeIndex + 1} / ${state.queue.length}`;
+  let sel = document.getElementById('selActiveMedia');
+  if (state.queue && state.queue.length > 0) {
+    if (group) group.style.display = 'flex';
+    if (counter) counter.innerText = `${state.activeIndex + 1} / ${state.queue.length}`;
+    if (sel) {
+      sel.innerHTML = state.queue.map((item, idx) => `
+        <option value="${idx}" ${idx === state.activeIndex ? 'selected' : ''}>${idx + 1}. ${item.filename || item.name}</option>
+      `).join('');
+    }
   } else {
-    group.style.display = 'none';
+    if (group) group.style.display = 'none';
   }
 }
 
@@ -3413,7 +3542,7 @@ function setupKeyboardShortcuts() {
 }
 
 async function selectMedia(idx) {
-  if (idx < 0 || idx >= state.queue.length) return;
+  if (idx < 0 || !state.queue || idx >= state.queue.length) return;
   state.activeIndex = idx;
   try {
     if (window.pywebview && window.pywebview.api) {
@@ -3430,11 +3559,11 @@ async function selectMedia(idx) {
   document.getElementById('viewModePill').style.display = 'flex';
   document.getElementById('canvasHud').style.display = 'flex';
 
-  document.getElementById('lblVideoName').innerText = item.filename;
+  document.getElementById('lblVideoName').innerText = item.filename || item.name;
   document.getElementById('lblFileSize').innerText = `${item.size_mb} MB`;
   document.getElementById('lblMediaTypeBadge').innerText = item.is_image ? 'Active Photo' : 'Active Video';
-  document.getElementById('valMetaRes').innerText = `${item.width}x${item.height} (${item.dar})`;
-  document.getElementById('valMetaCodec').innerText = `${item.video_codec.toUpperCase()} / ${item.fps} fps`;
+  document.getElementById('valMetaRes').innerText = `${item.width}x${item.height} (${item.dar || '16:9'})`;
+  document.getElementById('valMetaCodec').innerText = `${(item.video_codec || 'unknown').toUpperCase()} / ${item.fps} fps`;
 
   updateFolderNav();
   updateResolutionTags();
@@ -3444,24 +3573,26 @@ async function selectMedia(idx) {
   let trimCard = document.getElementById('cardTrimControls');
 
   if (item.is_image) {
-    scrubber.style.display = 'none';
-    jumps.style.display = 'none';
-    trimCard.style.display = 'none';
+    if (scrubber) scrubber.style.display = 'none';
+    if (jumps) jumps.style.display = 'none';
+    if (trimCard) trimCard.style.display = 'none';
     document.getElementById('lblTimeline').innerText = 'Photo Mode - Single Frame Canvas';
     document.getElementById('lblExportBtn').innerText = 'Export Remastered Photo';
     state.currentSec = 0;
   } else {
-    scrubber.style.display = 'block';
-    jumps.style.display = 'flex';
-    trimCard.style.display = 'flex';
+    if (scrubber) scrubber.style.display = 'block';
+    if (jumps) jumps.style.display = 'flex';
+    if (trimCard) trimCard.style.display = 'flex';
     document.getElementById('lblExportBtn').innerText = 'Export Remastered Media';
     
     let dur = Math.max(1, Math.floor(item.duration));
-    scrubber.min = 0;
-    scrubber.max = dur;
-    let defSec = dur > 60 ? Math.floor(Math.min(dur * 0.1, 45)) : Math.floor(dur / 4);
-    scrubber.value = defSec;
-    state.currentSec = defSec;
+    if (scrubber) {
+      scrubber.min = 0;
+      scrubber.max = dur;
+      let defSec = dur > 60 ? Math.floor(Math.min(dur * 0.1, 45)) : Math.floor(dur / 4);
+      scrubber.value = defSec;
+      state.currentSec = defSec;
+    }
     updateTimeReadout();
   }
 
@@ -3591,18 +3722,57 @@ function onToggleCRTCurve(checked) {
 function onToggleVHSMode(checked) {
   state.settings.vhs_mode = checked;
   const imgAfter = document.getElementById('imgAfter');
-  if (checked) {
-    imgAfter.classList.add('vhs-jitter');
-    showToast("VHS Analog Tape Mode active");
-  } else {
-    imgAfter.classList.remove('vhs-jitter');
+  const clip = document.getElementById('afterClip');
+  const band = document.getElementById('vhsTrackingBand');
+  
+  if (band) band.style.display = checked ? 'block' : 'none';
+  if (imgAfter) {
+    if (checked) imgAfter.classList.add('vhs-jitter');
+    else imgAfter.classList.remove('vhs-jitter');
   }
+  if (clip) {
+    if (checked) clip.style.filter = 'url(#vhsChromaFilter)';
+    else clip.style.filter = 'none';
+  }
+  updateLiveGPUGrade();
+  showToast(checked ? "NTSC VHS Analog Tape Mode active" : "VHS Mode disabled");
 }
 
 function onVhsChromaChange(val) {
   val = parseFloat(val);
   state.settings.vhs_chroma = val;
-  document.getElementById('valVhsChroma').innerText = `${val.toFixed(1)} px`;
+  const lbl = document.getElementById('valVhsChroma');
+  if (lbl) lbl.innerText = `${val.toFixed(1)} px`;
+  const rOff = document.getElementById('vhsRedOffset');
+  const bOff = document.getElementById('vhsBlueOffset');
+  if (rOff) rOff.setAttribute('dx', (-val).toFixed(1));
+  if (bOff) bOff.setAttribute('dx', val.toFixed(1));
+}
+
+function onToggleCRTScanlines(checked) {
+  state.settings.crt_scanlines = checked;
+  const overlay = document.getElementById('crtOverlay');
+  if (overlay) overlay.style.display = checked ? 'block' : 'none';
+  showToast(checked ? "Trinitron CRT Phosphor Triads enabled" : "CRT scanlines disabled");
+}
+
+function onCrtIntensityChange(val) {
+  val = parseFloat(val);
+  state.settings.crt_intensity = val;
+  const lbl = document.getElementById('valCrtIntensity');
+  if (lbl) lbl.innerText = `${Math.round(val * 100)}%`;
+  const overlay = document.getElementById('crtOverlay');
+  if (overlay) overlay.style.opacity = (val * 1.5).toString();
+}
+
+function onToggleCRTCurve(checked) {
+  state.settings.crt_curve = checked;
+  const bounds = document.getElementById('canvasBounds');
+  if (bounds) {
+    if (checked) bounds.classList.add('crt-curved');
+    else bounds.classList.remove('crt-curved');
+  }
+  showToast(checked ? "Curved glass tube monitor enabled" : "Flat canvas enabled");
 }
 
 function onToggleAudioEQ(checked) {
@@ -3617,36 +3787,82 @@ async function refreshFrame() {
   if (state.activeIndex < 0) return;
   
   let loader = document.getElementById('frameLoader');
-  loader.style.display = 'flex';
-  document.getElementById('lblLoaderText').innerText = `Processing frame...`;
-
-  if (state.viewMode === 'ab_compare') {
-    let res = await window.pywebview.api.get_ab_model_comparison(state.currentSec, state.settings);
-    if (res && res.model_a && res.model_b) {
-      let imgB = document.getElementById('imgBefore');
-      let imgA = document.getElementById('imgAfter');
-      imgB.src = res.model_b;
-      imgA.src = res.model_a;
-      document.getElementById('tagSource').innerText = res.name_b;
-      document.getElementById('tagRemaster').innerText = res.name_a;
-      document.getElementById('lblFrameTech').innerText = "A/B Neural vs Traditional Scaler Compare";
-    }
-    loader.style.display = 'none';
-    return;
+  if (loader) {
+    loader.style.display = 'flex';
+    document.getElementById('lblLoaderText').innerText = `Processing frame...`;
   }
 
-  let res = await window.pywebview.api.extract_preview_frames(state.currentSec, state.settings);
-  if (res && res.before && res.after) {
-    let imgB = document.getElementById('imgBefore');
-    let imgA = document.getElementById('imgAfter');
-    imgB.src = res.before;
-    imgA.src = res.after;
-    imgA.style.filter = 'none';
-    let modelTag = state.settings.ai_model.includes('realesr') ? 'Real-ESRGAN AI' : 'Lanczos-3 + CAS';
-    document.getElementById('lblFrameTech').innerText = `${res.width}x${res.height} ${modelTag} (${res.timestamp})`;
-    updateResolutionTags();
-  } else {
-    loader.style.display = 'none';
+  try {
+    if (state.viewMode === 'ab_compare') {
+      let res = await window.pywebview.api.get_ab_model_comparison(state.currentSec, state.settings);
+      if (res && res.model_a && res.model_b) {
+        let imgB = document.getElementById('imgBefore');
+        let imgA = document.getElementById('imgAfter');
+        imgB.src = res.model_b;
+        imgA.src = res.model_a;
+        imgB.style.display = 'block';
+        imgA.style.display = 'block';
+        imgB.style.opacity = '1';
+        imgA.style.opacity = '1';
+        document.getElementById('tagSource').innerText = res.name_b;
+        document.getElementById('tagRemaster').innerText = res.name_a;
+        document.getElementById('lblFrameTech').innerText = "A/B Neural vs Traditional Scaler Compare";
+        document.getElementById('canvasBounds').style.display = 'inline-flex';
+        document.getElementById('curtainDivider').style.display = 'block';
+        document.getElementById('tagSource').style.display = 'block';
+        document.getElementById('tagRemaster').style.display = 'block';
+      }
+      return;
+    }
+
+    let res = await window.pywebview.api.extract_preview_frames(state.currentSec, state.settings);
+    if (res && res.before && res.after) {
+      let imgB = document.getElementById('imgBefore');
+      let imgA = document.getElementById('imgAfter');
+      imgB.src = res.before;
+      imgA.src = res.after;
+      imgB.style.display = 'block';
+      imgA.style.display = 'block';
+      imgB.style.opacity = '1';
+      imgA.style.opacity = '1';
+      document.getElementById('canvasBounds').style.display = 'inline-flex';
+      
+      let isSplit = (state.viewMode === 'split');
+      let isRemaster = (state.viewMode === 'remaster');
+      let isOriginal = (state.viewMode === 'original');
+
+      const afterClip = document.getElementById('afterClip');
+      const divider = document.getElementById('curtainDivider');
+      const tagL = document.getElementById('tagSource');
+      const tagR = document.getElementById('tagRemaster');
+
+      if (isSplit) {
+        afterClip.style.display = 'block';
+        afterClip.style.clipPath = `inset(0 0 0 ${state.curtainPct || 50}%)`;
+        divider.style.display = 'block';
+        tagL.style.display = 'block';
+        tagR.style.display = 'block';
+      } else if (isRemaster) {
+        afterClip.style.display = 'block';
+        afterClip.style.clipPath = 'inset(0 0 0 0%)';
+        divider.style.display = 'none';
+        tagL.style.display = 'none';
+        tagR.style.display = 'block';
+      } else if (isOriginal) {
+        afterClip.style.display = 'none';
+        divider.style.display = 'none';
+        tagL.style.display = 'block';
+        tagR.style.display = 'none';
+      }
+
+      let modelTag = state.settings.ai_model.includes('realesr') ? 'Real-ESRGAN AI' : 'Lanczos-3 + CAS';
+      document.getElementById('lblFrameTech').innerText = `${res.width}x${res.height} ${modelTag} (${res.timestamp})`;
+      updateResolutionTags();
+    }
+  } catch (err) {
+    console.error("refreshFrame error:", err);
+  } finally {
+    if (loader) loader.style.display = 'none';
   }
 }
 
@@ -3731,40 +3947,58 @@ function setupCurtainDivider() {
   });
 }
 
-function setViewMode(mode) {
+async function setViewMode(mode) {
+  let prevMode = state.viewMode;
   state.viewMode = mode;
   document.querySelectorAll('.tab-pill').forEach(t => t.classList.remove('active'));
   const afterClip = document.getElementById('afterClip');
   const divider = document.getElementById('curtainDivider');
   const loader = document.getElementById('frameLoader');
   const bounds = document.getElementById('canvasBounds');
+  const tagL = document.getElementById('tagSource');
+  const tagR = document.getElementById('tagRemaster');
+
+  if (bounds) bounds.style.display = 'inline-flex';
+  if (loader) loader.style.display = 'none';
 
   if (mode === 'split') {
     document.getElementById('tabSplit').classList.add('active');
     afterClip.style.display = 'block';
-    setCurtainPos(50);
+    setCurtainPos(state.curtainPct || 50);
     divider.style.display = 'block';
+    tagL.style.display = 'block';
+    tagR.style.display = 'block';
     updateResolutionTags();
-    refreshFrame();
+    if (prevMode === 'ab_compare') {
+      await refreshFrame();
+    }
   } else if (mode === 'ab_compare') {
     document.getElementById('tabABCompare').classList.add('active');
     afterClip.style.display = 'block';
-    setCurtainPos(50);
+    setCurtainPos(state.curtainPct || 50);
     divider.style.display = 'block';
-    refreshFrame();
+    tagL.style.display = 'block';
+    tagR.style.display = 'block';
+    await refreshFrame();
   } else if (mode === 'original') {
     document.getElementById('tabOriginal').classList.add('active');
     afterClip.style.display = 'none';
     divider.style.display = 'none';
-    loader.style.display = 'none';
-    if (bounds) bounds.style.display = 'inline-flex';
+    tagL.style.display = 'block';
+    tagR.style.display = 'none';
+    if (prevMode === 'ab_compare') {
+      await refreshFrame();
+    }
   } else if (mode === 'remaster') {
     document.getElementById('tabRemaster').classList.add('active');
     afterClip.style.display = 'block';
     afterClip.style.clipPath = 'inset(0 0 0 0%)';
     divider.style.display = 'none';
-    loader.style.display = 'none';
-    if (bounds) bounds.style.display = 'inline-flex';
+    tagL.style.display = 'none';
+    tagR.style.display = 'block';
+    if (prevMode === 'ab_compare') {
+      await refreshFrame();
+    }
   }
 }
 
@@ -4042,14 +4276,15 @@ function seekToScene(sec) {
 // =========================================================================
 function updateBatchQueueUI() {
   let list = document.getElementById('batchQueueList');
-  if (!state.queue.length) {
-    list.innerHTML = '<div style="color:var(--text-dim); font-size:11px;">No media in queue</div>';
+  if (!list) return;
+  if (!state.queue || !state.queue.length) {
+    list.innerHTML = '<div style="color:var(--text-dim); font-size:11px; padding:8px 0;">No media in queue</div>';
     return;
   }
   list.innerHTML = state.queue.map((item, idx) => `
-    <div class="queue-row">
+    <div class="queue-row ${idx === state.activeIndex ? 'active' : ''}" style="${idx === state.activeIndex ? 'border-left: 2px solid var(--accent-primary); background: rgba(225, 29, 72, 0.12);' : ''}">
       <input type="checkbox" ${item.selected_for_batch !== false ? 'checked' : ''} onchange="onItemBatchToggle(${idx}, this.checked)" />
-      <span class="queue-item-title" onclick="selectMedia(${idx})" style="cursor:pointer;" title="${item.filename}">${idx + 1}. ${item.filename}</span>
+      <span class="queue-item-title" onclick="selectMedia(${idx})" style="cursor:pointer; ${idx === state.activeIndex ? 'color: #ffffff; font-weight: 600;' : ''}" title="${item.filename || item.name}">${idx + 1}. ${item.filename || item.name}</span>
       <span class="queue-status-badge ${item.status.toLowerCase()}">${item.status}</span>
     </div>
   `).join('');
@@ -4308,17 +4543,35 @@ function resetTrim() {
 }
 
 async function triggerAddFiles() {
-  let res = await window.pywebview.api.add_files_dialog();
-  state.queue = res.queue;
-  state.activeIndex = res.active_index;
-  if (state.activeIndex >= 0) selectMedia(state.activeIndex);
+  try {
+    let res = await window.pywebview.api.add_files_dialog();
+    if (res && res.queue) {
+      state.queue = res.queue;
+      state.activeIndex = res.active_index;
+      updateBatchQueueUI();
+      updateFolderNav();
+      if (state.activeIndex >= 0) await selectMedia(state.activeIndex);
+      showToast(`Loaded ${res.queue.length} items`);
+    }
+  } catch (e) {
+    console.error("add_files error:", e);
+  }
 }
 
 async function triggerAddFolder() {
-  let res = await window.pywebview.api.add_folder_dialog();
-  state.queue = res.queue;
-  state.activeIndex = res.active_index;
-  if (state.activeIndex >= 0) selectMedia(state.activeIndex);
+  try {
+    let res = await window.pywebview.api.add_folder_dialog();
+    if (res && res.queue) {
+      state.queue = res.queue;
+      state.activeIndex = res.active_index;
+      updateBatchQueueUI();
+      updateFolderNav();
+      if (state.activeIndex >= 0) await selectMedia(state.activeIndex);
+      showToast(`Loaded folder with ${res.queue.length} items`);
+    }
+  } catch (e) {
+    console.error("add_folder error:", e);
+  }
 }
 
 function openOutputDir() {
@@ -4392,7 +4645,7 @@ def start_app():
     if not os.path.exists(icon_path):
         icon_path = os.path.join(get_base_dir(), "apple upscaler", "apple_logo.ico")
 
-    window_title = BRANDING.get("window_title", "NeoCel AI Studio Pro - Universal Anime & Film Restoration 2026")
+    window_title = BRANDING.get("window_title", "Apple Upscaler Pro - Universal Anime & Film AI Remaster")
 
     window = webview.create_window(
         title=window_title,
@@ -4401,7 +4654,7 @@ def start_app():
         width=1480,
         height=950,
         min_size=(1140, 750),
-        background_color="#090a0f"
+        background_color="#0c090a"
     )
     webview.start(debug=False)
 
