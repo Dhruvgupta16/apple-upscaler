@@ -1,0 +1,30 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# PyInstaller build artifacts
+build/
+dist/
+*.spec
+
+# Temp files & caches
+*.log
+*.tmp
+temp/
+neocel_studio_cache/
+
+# Large video demo files
+*.mkv
+*.mp4
+*.avi
+ai_models/*.mp4
+ai_models/test_*.png
+ai_models/test_*.jpg
+
+# OS generated files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
