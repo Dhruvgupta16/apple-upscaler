@@ -271,18 +271,24 @@ class UniversalStudioBackend:
 
     def init_environment(self):
         app_dir = get_base_dir()
-        
-        # Auto-discover video files directly in the active project folder
-        if os.path.exists(app_dir):
-            for f in sorted(os.listdir(app_dir)):
-                if f.lower().endswith(VIDEO_EXTS) and "remaster" not in f.lower() and "sample" not in f.lower() and "preview" not in f.lower():
-                    full = os.path.join(app_dir, f)
-                    if not any(item["path"] == full for item in self.queue):
-                        info = probe_media(full)
-                        if info:
-                            self.queue.append(info)
+        parent_dir = os.path.dirname(app_dir)
 
-        if self.queue:
+        candidate_dirs = [app_dir]
+        if parent_dir and os.path.exists(parent_dir) and parent_dir != app_dir:
+            candidate_dirs.append(parent_dir)
+        
+        # Auto-discover video files directly in project directories
+        for d in candidate_dirs:
+            if os.path.exists(d):
+                for f in sorted(os.listdir(d)):
+                    if f.lower().endswith(VIDEO_EXTS) and "remaster" not in f.lower() and "sample" not in f.lower() and "preview" not in f.lower():
+                        full = os.path.join(d, f)
+                        if not any(item["path"] == full for item in self.queue):
+                            info = probe_media(full)
+                            if info:
+                                self.queue.append(info)
+
+        if self.queue and self.active_index == -1:
             self.active_index = 0
 
         self.output_dir = os.path.join(app_dir, "Remastered_Studio_Output")
@@ -337,6 +343,7 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
             self.cached_ts_str = ""
             self.cached_source_file = ""
             self.cached_ai_scaled_file = ""
+            self.cached_ai_model = ""
             return self.queue[index]
         return None
 
@@ -362,13 +369,16 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
         )
         files = win.create_file_dialog(webview.OPEN_DIALOG, allow_multiple=True, file_types=file_types)
         if files:
+            new_idx = self.active_index
             for p in files:
                 if not any(item["path"] == p for item in self.queue):
                     info = probe_media(p)
                     if info:
                         self.queue.append(info)
+                        new_idx = len(self.queue) - 1
             if self.active_index == -1 and self.queue:
-                self.active_index = 0
+                new_idx = 0
+            self.active_index = new_idx
         return {"queue": self.queue, "active_index": self.active_index}
 
     def add_folder_dialog(self):
@@ -377,6 +387,7 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
         folder = win.create_file_dialog(webview.FOLDER_DIALOG)
         if folder and len(folder) > 0:
             d = folder[0]
+            new_idx = self.active_index
             for f in sorted(os.listdir(d)):
                 if f.lower().endswith(ALL_SUPPORTED_EXTS) and "remaster" not in f.lower() and "sample" not in f.lower():
                     full = os.path.join(d, f)
@@ -384,8 +395,10 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
                         info = probe_media(full)
                         if info:
                             self.queue.append(info)
+                            new_idx = len(self.queue) - 1
             if self.active_index == -1 and self.queue:
-                self.active_index = 0
+                new_idx = 0
+            self.active_index = new_idx
         return {"queue": self.queue, "active_index": self.active_index}
 
     def browse_lut_dialog(self):
@@ -1208,8 +1221,8 @@ HTML_UI = """<!DOCTYPE html>
   --border-subtle: rgba(255, 255, 255, 0.07);
   --border-bright: rgba(255, 255, 255, 0.14);
   
-  --accent-primary: #5246ea;
-  --accent-primary-hover: #4538df;
+  --accent-primary: #e11d48;
+  --accent-primary-hover: #f43f5e;
   --accent-cyan: #38bdf8;
   --accent-emerald: #10b981;
   --accent-amber: #f59e0b;
@@ -1280,7 +1293,7 @@ body {
 .brand-logo {
   width: 28px;
   height: 28px;
-  background: linear-gradient(135deg, #5246ea, #38bdf8);
+  background: linear-gradient(135deg, #e11d48, #38bdf8);
   border-radius: 8px;
   display: flex;
   align-items: center;
@@ -1883,9 +1896,14 @@ img:not([src]), img[src=""], img[src="#"] {
 /* QUICK LOOK PRESET CHIPS */
 .quick-preset-bar {
   display: flex;
-  gap: 6px;
+  gap: 8px;
   overflow-x: auto;
-  padding-bottom: 2px;
+  padding-bottom: 4px;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+.quick-preset-bar::-webkit-scrollbar {
+  display: none; /* Chrome / EdgeChromium */
 }
 .chip-preset {
   background: var(--bg-input);
@@ -2175,7 +2193,7 @@ img:not([src]), img[src=""], img[src="#"] {
 .export-progress-fill {
   width: 0%;
   height: 100%;
-  background: linear-gradient(90deg, #5246ea, #38bdf8);
+  background: linear-gradient(90deg, #e11d48, #38bdf8);
   border-radius: var(--radius-pill);
   transition: width 0.2s ease-out;
 }
@@ -2311,14 +2329,37 @@ img:not([src]), img[src=""], img[src="#"] {
       0 0 1 0 0
       0 0 0 1 0" />
   </filter>
-  <filter id="vhsChromaFilter">
-    <feColorMatrix type="matrix" values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0" in="SourceGraphic" result="red"/>
-    <feOffset id="vhsRedOffset" dx="-2.5" dy="0" in="red" result="red_shift"/>
-    <feColorMatrix type="matrix" values="0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0" in="SourceGraphic" result="green"/>
-    <feColorMatrix type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0" in="SourceGraphic" result="blue"/>
-    <feOffset id="vhsBlueOffset" dx="2.5" dy="0" in="blue" result="blue_shift"/>
-    <feBlend mode="screen" in="red_shift" in2="green" result="rg"/>
-    <feBlend mode="screen" in="rg" in2="blue_shift" result="vhs_out"/>
+  <filter id="vhsChromaFilter" x="-10%" y="-10%" width="120%" height="120%">
+    <!-- Authentic NTSC VHS Chroma Subcarrier Horizontal Smear & Delay -->
+    <feColorMatrix type="matrix" values="
+      1 0 0 0 0
+      0 0 0 0 0
+      0 0 0 0 0
+      0 0 0 1 0" in="SourceGraphic" result="red"/>
+    <feOffset id="vhsRedOffset" dx="-3.5" dy="0" in="red" result="red_shift"/>
+    <feGaussianBlur stdDeviation="2.0 0" in="red_shift" result="red_smear"/>
+
+    <feColorMatrix type="matrix" values="
+      0 0 0 0 0
+      0 1 0 0 0
+      0 0 0 0 0
+      0 0 0 1 0" in="SourceGraphic" result="green"/>
+
+    <feColorMatrix type="matrix" values="
+      0 0 0 0 0
+      0 0 0 0 0
+      0 0 1 0 0
+      0 0 0 1 0" in="SourceGraphic" result="blue"/>
+    <feOffset id="vhsBlueOffset" dx="3.5" dy="0" in="blue" result="blue_shift"/>
+    <feGaussianBlur stdDeviation="2.5 0" in="blue_shift" result="blue_smear"/>
+
+    <feBlend mode="screen" in="red_smear" in2="green" result="rg"/>
+    <feBlend mode="screen" in="rg" in2="blue_smear" result="vhs_rgb"/>
+    <feComponentTransfer in="vhs_rgb">
+      <feFuncR type="linear" slope="1.06" intercept="0.015"/>
+      <feFuncG type="linear" slope="1.00" intercept="0.01"/>
+      <feFuncB type="linear" slope="0.94" intercept="0.02"/>
+    </feComponentTransfer>
   </filter>
 </svg>
 
@@ -2338,7 +2379,7 @@ img:not([src]), img[src=""], img[src="#"] {
           </svg>
         </div>
         <div class="brand-title" id="lblAppName">Apple Upscaler</div>
-        <div class="brand-badge" id="lblAppEdition">Neural Pro</div>
+        <div class="brand-badge" id="lblAppEdition" style="background: rgba(225, 29, 72, 0.2); border: 1px solid rgba(225, 29, 72, 0.4); color: #fb7185;">Neural Pro</div>
 
         <!-- FOLDER VIDEO NAVIGATION ARROWS -->
         <div class="folder-nav-group" id="folderNavGroup" style="display:none;" title="Switch through videos in folder (Shortcuts: [ and ])">
@@ -2428,8 +2469,9 @@ img:not([src]), img[src=""], img[src="#"] {
           <img class="layer-after" id="imgAfter" style="display:none;" onload="this.style.display='block';" onerror="this.style.display='none';" />
         </div>
 
-        <!-- CRT OVERLAY -->
+        <!-- CRT & VHS OVERLAYS -->
         <div class="crt-overlay" id="crtOverlay"></div>
+        <div class="vhs-tracking-band" id="vhsTrackingBand"></div>
 
         <div class="curtain-divider" id="curtainDivider">
           <div class="curtain-knob">
@@ -2464,7 +2506,7 @@ img:not([src]), img[src=""], img[src="#"] {
       <!-- EMPTY STATE (NO MEDIA LOADED) -->
       <div class="empty-viewport" id="emptyViewport">
         <div class="empty-icon-wrap">
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#5246ea" stroke-width="2">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#e11d48" stroke-width="2">
             <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
             <polyline points="2 17 12 22 22 17"></polyline>
             <polyline points="2 12 12 17 22 12"></polyline>
@@ -2554,9 +2596,9 @@ img:not([src]), img[src=""], img[src="#"] {
 
       <!-- ONE-CLICK QUICK PRESETS -->
       <div class="studio-card">
-        <div class="card-title">Instant Film & Era Looks</div>
+        <div class="card-title">Color Grading Profiles</div>
         <div class="quick-preset-bar">
-          <button class="chip-preset" onclick="quickApplyPreset('cel_master')">Cel Master</button>
+          <button class="chip-preset" onclick="quickApplyPreset('cel_master')">Apple Master</button>
           <button class="chip-preset" onclick="quickApplyPreset('film_35mm')">35mm Film</button>
           <button class="chip-preset" onclick="quickApplyPreset('ink_sharp')">Ink 4K</button>
           <button class="chip-preset" onclick="quickApplyPreset('hdr_pop')">HDR Pop</button>
@@ -3319,6 +3361,8 @@ function syncAllInputsFromSettings() {
   }
   if (document.getElementById('chkVhsMode')) {
     document.getElementById('chkVhsMode').checked = !!s.vhs_mode;
+    const band = document.getElementById('vhsTrackingBand');
+    if (band) band.style.display = s.vhs_mode ? 'block' : 'none';
   }
 }
 
@@ -3508,11 +3552,11 @@ function updateLiveGPUGrade() {
 
   let filterStr = `contrast(${contPct}%) saturate(${satPct}%) brightness(${brightPct}%) url(#liveGrade)`;
   if (s.vhs_mode) {
-    let ch = s.vhs_chroma || 2.0;
+    let ch = s.vhs_chroma || 2.5;
     const rOff = document.getElementById('vhsRedOffset');
     const bOff = document.getElementById('vhsBlueOffset');
-    if (rOff) rOff.setAttribute('dx', (-ch).toString());
-    if (bOff) bOff.setAttribute('dx', (ch).toString());
+    if (rOff) rOff.setAttribute('dx', (-ch * 1.2).toFixed(1));
+    if (bOff) bOff.setAttribute('dx', (ch * 1.2).toFixed(1));
     filterStr += ` url(#vhsChromaFilter)`;
   }
   imgAfter.style.filter = filterStr;
@@ -3692,6 +3736,8 @@ function setViewMode(mode) {
   document.querySelectorAll('.tab-pill').forEach(t => t.classList.remove('active'));
   const afterClip = document.getElementById('afterClip');
   const divider = document.getElementById('curtainDivider');
+  const loader = document.getElementById('frameLoader');
+  const bounds = document.getElementById('canvasBounds');
 
   if (mode === 'split') {
     document.getElementById('tabSplit').classList.add('active');
@@ -3710,11 +3756,15 @@ function setViewMode(mode) {
     document.getElementById('tabOriginal').classList.add('active');
     afterClip.style.display = 'none';
     divider.style.display = 'none';
+    loader.style.display = 'none';
+    if (bounds) bounds.style.display = 'inline-flex';
   } else if (mode === 'remaster') {
     document.getElementById('tabRemaster').classList.add('active');
     afterClip.style.display = 'block';
     afterClip.style.clipPath = 'inset(0 0 0 0%)';
     divider.style.display = 'none';
+    loader.style.display = 'none';
+    if (bounds) bounds.style.display = 'inline-flex';
   }
 }
 
