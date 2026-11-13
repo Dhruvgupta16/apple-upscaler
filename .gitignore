@@ -6,13 +6,12 @@ __pycache__/
 # PyInstaller build artifacts
 build/
 dist/
-*.spec
 
 # Temp files & caches
 *.log
 *.tmp
 temp/
-neocel_studio_cache/
+apple_upscaler_cache/
 
 # Large video demo files
 *.mkv

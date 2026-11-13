@@ -1,10 +1,10 @@
 {
-  "app_name": "NeoCel AI Studio",
+  "app_name": "Apple Upscaler",
   "app_edition": "Neural Pro",
   "app_version": "2.2.0",
-  "app_tagline": "Universal Anime & Film Neural Remastering Studio",
-  "window_title": "NeoCel AI Studio Pro - Universal Anime & Film Restoration 2026",
-  "author": "Community Open-Source",
+  "app_tagline": "Universal AI Anime & Film Neural Remastering Studio",
+  "window_title": "Apple Upscaler Pro - Universal Anime & Film AI Remaster",
+  "author": "Dhruv Gupta",
   "license": "MIT",
-  "github_repo": "https://github.com/Dhruvgupta16/NeoCelStudio"
+  "github_repo": "https://github.com/Dhruvgupta16/apple-upscaler"
 }

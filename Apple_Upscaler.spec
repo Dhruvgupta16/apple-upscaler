@@ -6,7 +6,9 @@ clr_datas, clr_binaries, clr_hiddenimports = collect_all('clr_loader')
 py_datas, py_binaries, py_hiddenimports = collect_all('pythonnet')
 
 datas = [
-    ('neocel_icon.ico', '.'),
+    ('apple_logo.ico', '.'),
+    ('apple_logo.png', '.'),
+    ('apple_logo_512.png', '.'),
     ('ai_models', 'ai_models'),
     ('luts', 'luts'),
     ('branding.json', '.'),
@@ -27,7 +29,7 @@ hiddenimports = [
 ] + webview_hiddenimports + clr_hiddenimports + py_hiddenimports
 
 a = Analysis(
-    ['neocel_app.py'],
+    ['apple_upscaler.py'],
     pathex=[],
     binaries=binaries,
     datas=datas,
@@ -47,7 +49,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='NeoCel_Studio',
+    name='Apple_Upscaler',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -60,5 +62,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['neocel_icon.ico'],
+    icon=['apple_logo.ico'],
 )

@@ -47,18 +47,20 @@ def get_base_dir():
 
 def load_branding():
     default_branding = {
-        "app_name": "NeoCel AI Studio",
+        "app_name": "Apple Upscaler",
         "app_edition": "Neural Pro",
         "app_version": "2.2.0",
-        "app_tagline": "Universal Anime & Film Neural Remastering Studio",
-        "window_title": "NeoCel AI Studio Pro - Universal Anime & Film Restoration 2026",
-        "author": "Community Open-Source",
-        "license": "MIT"
+        "app_tagline": "Universal AI Anime & Film Neural Remastering Studio",
+        "window_title": "Apple Upscaler Pro - Universal Anime & Film AI Remaster 2026",
+        "author": "Dhruv Gupta",
+        "license": "MIT",
+        "github_repo": "https://github.com/Dhruvgupta16/apple-upscaler"
     }
     candidates = [
         os.path.join(get_base_dir(), "branding.json"),
-        os.path.join(get_base_dir(), "AnimeRemasterStudio", "branding.json"),
-        os.path.join(os.path.dirname(get_base_dir()), "AnimeRemasterStudio", "branding.json")
+        os.path.join(get_base_dir(), "apple upscaler", "branding.json"),
+        os.path.join(os.path.dirname(get_base_dir()), "apple upscaler", "branding.json"),
+        os.path.join(get_base_dir(), "AnimeRemasterStudio", "branding.json")
     ]
     if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
         candidates.insert(0, os.path.join(sys._MEIPASS, "branding.json"))
@@ -258,7 +260,7 @@ class UniversalStudioBackend:
         self.thread_pool = ThreadPoolExecutor(max_workers=6)
         
         # SMART ZERO-LATENCY FRAME CACHE
-        self.cache_dir = os.path.join(tempfile.gettempdir(), "neocel_studio_cache")
+        self.cache_dir = os.path.join(tempfile.gettempdir(), "apple_upscaler_cache")
         os.makedirs(self.cache_dir, exist_ok=True)
         self.cached_media_path = ""
         self.cached_ts_str = ""
@@ -293,8 +295,8 @@ class UniversalStudioBackend:
         try:
             shader_dir = os.path.expandvars(r"%APPDATA%\PotPlayerMini64\PxShader")
             os.makedirs(shader_dir, exist_ok=True)
-            shader_file = os.path.join(shader_dir, "NeoCel_Remaster.txt")
-            code = """// NeoCel_Remaster=ps_3_0
+            shader_file = os.path.join(shader_dir, "Apple_Upscaler_Remaster.txt")
+            code = """// Apple_Upscaler_Remaster=ps_3_0
 sampler s0 : register(s0);
 float4 p0 : register(c0);
 float4 main(float2 tex : TEXCOORD0) : COLOR {
@@ -423,7 +425,7 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
     def save_preset_dialog(self, settings_json):
         if not webview.windows: return False
         win = webview.windows[0]
-        file_types = ('NeoCel Studio Preset (*.neopreset;*.json)', 'All files (*.*)')
+        file_types = ('Apple Upscaler Preset (*.applepreset;*.json)', 'All files (*.*)')
         save_path = win.create_file_dialog(webview.SAVE_DIALOG, save_filename="Anime_Custom_Grade.neopreset", file_types=file_types)
         if save_path:
             p = save_path if isinstance(save_path, str) else save_path[0]
@@ -438,7 +440,7 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
     def load_preset_dialog(self):
         if not webview.windows: return None
         win = webview.windows[0]
-        file_types = ('NeoCel Studio Preset (*.neopreset;*.json)', 'All files (*.*)')
+        file_types = ('Apple Upscaler Preset (*.applepreset;*.json)', 'All files (*.*)')
         files = win.create_file_dialog(webview.OPEN_DIALOG, allow_multiple=False, file_types=file_types)
         if files and len(files) > 0:
             try:
@@ -468,7 +470,7 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
         try:
             temp_frame = self.cached_source_file if (self.cached_media_path == item["path"] and self.cached_ts_str == ts_str and os.path.exists(self.cached_source_file)) else None
             if not temp_frame:
-                temp_frame = os.path.join(tempfile.gettempdir(), f"neocel_match_src_{int(time.time()*1000)}.jpg")
+                temp_frame = os.path.join(tempfile.gettempdir(), f"apple_match_src_{int(time.time()*1000)}.jpg")
                 cmd = ["ffmpeg", "-y"]
                 if not item.get("is_image"): cmd += ["-ss", ts_str]
                 cmd += ["-i", item["path"], "-vframes", "1", "-q:v", "2", temp_frame]
@@ -916,7 +918,7 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
                 
                 chain = [
                     f"eq=contrast={c:.2f}:brightness={b:.3f}:gamma={g:.2f}:saturation={sat:.2f}",
-                    f"scale=320:240:flags=bilinear"
+                    f"scale=360:-2:flags=bilinear"
                 ]
                 if abs(temp) > 1:
                     chain.append(f"colorbalance=rs={temp*0.005:.3f}:bs={-temp*0.005:.3f}")
@@ -959,7 +961,7 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
         ts_str = "00:00:00" if is_image else format_time(timestamp_sec)
         
         temp_dir = tempfile.gettempdir()
-        sample_out = os.path.join(temp_dir, f"neocel_remaster_preview_{int(time.time()*1000)}.mkv")
+        sample_out = os.path.join(temp_dir, f"apple_remaster_preview_{int(time.time()*1000)}.mkv")
         
         filter_str, is_complex, _, _ = self.build_filter_graph(item, settings)
 
@@ -1050,7 +1052,7 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
 
                 if is_image:
                     if "realesr" in ai_model and self.realesrgan_exe and os.path.exists(self.realesrgan_exe):
-                        temp_pre = os.path.join(tempfile.gettempdir(), f"neocel_exp_in_{int(time.time()*1000)}.png")
+                        temp_pre = os.path.join(tempfile.gettempdir(), f"apple_exp_in_{int(time.time()*1000)}.png")
                         cmd_p = ["ffmpeg", "-y", "-i", item["path"]]
                         if is_complex: cmd_p += ["-filter_complex", filter_str]
                         else: cmd_p += ["-vf", filter_str]
@@ -1197,7 +1199,7 @@ HTML_UI = """<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>NeoCel AI Studio Pro</title>
+<title>Apple Upscaler Pro</title>
 <style>
 :root {
   --bg-app: #090a0f;
@@ -2541,6 +2543,15 @@ img:not([src]), img[src=""], img[src="#"] {
       0 0 1 0 0
       0 0 0 1 0" />
   </filter>
+  <filter id="vhsChromaFilter">
+    <feColorMatrix type="matrix" values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0" in="SourceGraphic" result="red"/>
+    <feOffset id="vhsRedOffset" dx="-2.5" dy="0" in="red" result="red_shift"/>
+    <feColorMatrix type="matrix" values="0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0" in="SourceGraphic" result="green"/>
+    <feColorMatrix type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0" in="SourceGraphic" result="blue"/>
+    <feOffset id="vhsBlueOffset" dx="2.5" dy="0" in="blue" result="blue_shift"/>
+    <feBlend mode="screen" in="red_shift" in2="green" result="rg"/>
+    <feBlend mode="screen" in="rg" in2="blue_shift" result="vhs_out"/>
+  </filter>
 </svg>
 
 <div class="app-shell">
@@ -2551,14 +2562,10 @@ img:not([src]), img[src=""], img[src="#"] {
     <!-- TOPBAR -->
     <header class="topbar">
       <div class="brand-group">
-        <div class="brand-logo">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.5">
-            <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
-            <polyline points="2 17 12 22 22 17"></polyline>
-            <polyline points="2 12 12 17 22 12"></polyline>
-          </svg>
+        <div class="brand-logo" style="background: transparent; border: none; padding: 0;">
+          <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAB1UlEQVR4nO2aPU4DMRCFn59cpAiioqSNREOfG8B1koKakiJcB26QniZSWk6AkiJdUBBBVtif7HrG3mj8Nbva1Y5/5o3HaxsoFAqWcRgYjy+3+7p3b0+f4vUljOM1jM5Go0ovvu52rs3zk4frJtN7aSU4JOyAus44NL6l4Vi/f5UQuPhBcHaijNXzzc+1yfsHzx/Q8H6WLFAVHseOqEKr4UcI47hcBYdKaMoO2hDGIYxDGMelLnBRM0maZxoHCOM4LY9qI6UYj8Tcj8eVzz+2W+SAMI6LlX2dR7UJFRMTDh6JuZtM/j1brdfIBWEcpyH7Ki/35Rx1xISDhyCSDa+yqREqhHFcrOw1vN5GkxK6hoOXqtTVdPp3v1kucSkQxmHMx3XyD9WggWTYUcrQJck+hDCOlzQWquAYBkNXhuuTAnOkvq4p8dx0SBiHMA5hHMI4hHF87MibKyNI/RoTxiGM4+tehJOHxe/hpJyrwOfQZ2mMMA5hHC81GqfIBmVRVAHCOF7KUNPkqKt0tfcCQgjjeA2jsV5LuVnqYk+EDGF7PGabnDCOT11g21GY1IryWob7nvk5/U67QwjjuNTH5OoGKik7gwmBeccKSnVMV6hpvFAoFDBwvgFV4a0FbP4m6gAAAABJRU5ErkJggg==" style="width: 22px; height: 22px; image-rendering: pixelated; object-fit: contain; vertical-align: middle;" />
         </div>
-        <div class="brand-title" id="lblAppName">NeoCel AI Studio</div>
+        <div class="brand-title" id="lblAppName">Apple Upscaler</div>
         <div class="brand-badge" id="lblAppEdition">Neural Pro</div>
 
         <!-- FOLDER VIDEO NAVIGATION ARROWS -->
@@ -4006,25 +4013,6 @@ async function selectMedia(idx) {
   updateBatchQueueUI();
   await refreshFrame();
 }
-    state.currentSec = 0;
-  } else {
-    scrubber.style.display = 'block';
-    jumps.style.display = 'flex';
-    trimCard.style.display = 'flex';
-    document.getElementById('lblExportBtn').innerText = 'Export Remastered Media';
-    
-    let dur = Math.max(1, Math.floor(item.duration));
-    scrubber.min = 0;
-    scrubber.max = dur;
-    let defSec = dur > 60 ? Math.floor(Math.min(dur * 0.1, 45)) : Math.floor(dur / 4);
-    scrubber.value = defSec;
-    state.currentSec = defSec;
-    updateTimeReadout();
-  }
-
-  updateBatchQueueUI();
-  refreshFrame();
-}
 
 function updateResolutionTags() {
   let item = state.queue[state.activeIndex];
@@ -4110,7 +4098,11 @@ function updateLiveGPUGrade() {
   let filterStr = `contrast(${contPct}%) saturate(${satPct}%) brightness(${brightPct}%) url(#liveGrade)`;
   if (s.vhs_mode) {
     let ch = s.vhs_chroma || 2.5;
-    filterStr += ` drop-shadow(-${ch}px 0 0 rgba(255, 20, 100, 0.7)) drop-shadow(${ch}px 0 0 rgba(0, 220, 255, 0.7))`;
+    const rOff = document.getElementById('vhsRedOffset');
+    const bOff = document.getElementById('vhsBlueOffset');
+    if (rOff) rOff.setAttribute('dx', (-ch).toString());
+    if (bOff) bOff.setAttribute('dx', (ch).toString());
+    filterStr += ` url(#vhsChromaFilter)`;
   }
   imgAfter.style.filter = filterStr;
 }
@@ -5015,11 +5007,13 @@ function onBatchFinished(success) {
 def start_app():
     backend = UniversalStudioBackend()
     
-    icon_path = os.path.join(get_base_dir(), "neocel_icon.ico")
+    icon_path = os.path.join(get_base_dir(), "apple_logo.ico")
     if not os.path.exists(icon_path):
-        icon_path = os.path.join(get_base_dir(), "AnimeRemasterStudio", "neocel_icon.ico")
+        icon_path = os.path.join(get_base_dir(), "apple_logo.ico")
+    if not os.path.exists(icon_path):
+        icon_path = os.path.join(get_base_dir(), "apple upscaler", "apple_logo.ico")
 
-    window_title = BRANDING.get("window_title", "NeoCel AI Studio Pro - Universal Anime & Film Restoration 2026")
+    window_title = BRANDING.get("window_title", "Apple Upscaler Pro - Universal Anime & Film AI Remaster 2026")
 
     window = webview.create_window(
         title=window_title,
