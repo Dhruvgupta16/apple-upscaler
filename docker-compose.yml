@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  apple-upscaler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: apple-upscaler:latest
+    container_name: apple_upscaler_studio
+    restart: unless-stopped
+    volumes:
+      - ./Remastered_Studio_Output:/app/Remastered_Studio_Output
+      - ./media_input:/app/media_input
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility,video
+    ports:
+      - "8080:8080"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
