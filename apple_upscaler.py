@@ -625,6 +625,27 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
             smooth_mask = arr_lap < 12
             noise_level = float(np.std(diff[smooth_mask])) if np.sum(smooth_mask) > 100 else float(np.std(diff))
 
+            # ================= CONTENT CLASSIFICATION: CEL ANIME VS LIVE-ACTION NATURE / FILM =================
+            small = im.resize((320, 180), Image.Resampling.BILINEAR)
+            small_gray = small.convert("L")
+            s_arr_gray = np.array(small_gray, dtype=np.float32)
+
+            blurred_macro = small_gray.filter(ImageFilter.BoxBlur(2))
+            arr_mean = np.array(blurred_macro, dtype=np.float32)
+            sqr_gray = Image.fromarray(np.clip(s_arr_gray**2 / 255.0, 0, 255).astype(np.uint8))
+            sqr_blurred = sqr_gray.filter(ImageFilter.BoxBlur(2))
+            arr_sqr_mean = np.array(sqr_blurred, dtype=np.float32) * 255.0
+
+            local_var = np.maximum(0, arr_sqr_mean - arr_mean**2)
+            local_std = np.sqrt(local_var)
+
+            flat_pixel_ratio = float(np.mean(local_std < 3.2))
+            texture_ratio = float(np.mean(local_std > 10.0))
+
+            # Cel anime has large uniform flat patches (flat >= 0.14) and lower texture entropy (< 0.38)
+            # Real-world nature and film have dense organic textures (leaves, water, bark) with texture >= 0.38
+            is_anime = bool(flat_pixel_ratio >= 0.14 and texture_ratio < 0.38)
+
             # ================= MULTI-SAMPLE TIMELINE PROFILING (NIGHT VS DAY INTELLIGENCE) =================
             is_mixed_dynamic_range = False
             min_scene_luma = mean_luma
@@ -667,31 +688,51 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
                 "smart_dynamic_range": True
             }
 
-            # 1. Resolution & Sharpness (480p / 576p SD CEL OVERHAUL)
+            # 1. Content-Aware Resolution & Sharpness Strategy
             orig_h = item.get("height", h)
             orig_w = item.get("width", w)
 
-            if orig_h <= 576:
-                problems.append(f"Standard Definition ({orig_w}x{orig_h}) with telecine softness & compression ringing")
+            if not is_anime:
+                # ================= REAL FILM / LIVE-ACTION NATURE / PHOTOGRAPHY =================
+                problems.append(f"Live-Action / Real Nature video ({orig_w}x{orig_h}) with optical lens softness")
+                enhancements.append("Pure AMD CAS 0.75 micro-contrast sharpness without ringing or halos")
+                enhancements.append("Zero spatial smear: Foliage, water ripples, and organic bark strictly preserved (Denoise 0.0)")
+                enhancements.append("Photographic fidelity: Comic-book ink line-darkening disabled (0.0)")
+                enhancements.append("Vibrant landscape grading: Lush natural greens and clear atmospheric depth")
+                calc_settings["ai_model"] = "realesr-animevideov3"
+                calc_settings["resolution"] = "1080p"
+                calc_settings["sharpness"] = 0.75
+                calc_settings["line_darken"] = 0.0
+                calc_settings["denoise"] = 0.0
+                calc_settings["deband"] = False
+                calc_settings["edge_clean"] = False
+                calc_settings["contrast"] = 1.060
+                calc_settings["saturation"] = 1.160
+                calc_settings["brightness"] = 0.002
+                calc_settings["gamma"] = 1.020
+            elif orig_h <= 576:
+                # ================= STANDARD DEFINITION CEL ANIME (480p / 576p) =================
+                problems.append(f"Standard Definition Anime ({orig_w}x{orig_h}) with telecine softness & compression ringing")
                 enhancements.append("Real-ESRGAN 4x deep cel reconstruction + AMD CAS 0.70 edge clarity + ink outline infill")
                 calc_settings["ai_model"] = "realesrgan-x4plus-anime"
                 calc_settings["resolution"] = "1080p"
                 calc_settings["sharpness"] = 0.70
-                calc_settings["line_darken"] = 0.25
-                calc_settings["denoise"] = 1.0
+                calc_settings["line_darken"] = 0.20
+                calc_settings["denoise"] = 1.0 if noise_level > 3.5 else 0.0
                 calc_settings["deband"] = True
                 calc_settings["edge_clean"] = True
-                calc_settings["contrast"] = 1.080
-                calc_settings["saturation"] = 1.180
-                calc_settings["brightness"] = 0.005
-                calc_settings["gamma"] = 1.040
+                calc_settings["contrast"] = 1.070
+                calc_settings["saturation"] = 1.160
+                calc_settings["brightness"] = 0.004
+                calc_settings["gamma"] = 1.035
             elif orig_h <= 720:
-                problems.append(f"720p HD with mild line softness (Laplacian score: {lap_var:.0f})")
+                problems.append(f"720p HD Anime with mild line softness (Laplacian score: {lap_var:.0f})")
                 enhancements.append("Target 1080p remaster with AMD CAS 0.60 edge reconstruction & light cel deband")
                 calc_settings["ai_model"] = "realesr-animevideov3"
                 calc_settings["resolution"] = "1080p"
                 calc_settings["sharpness"] = 0.60
-                calc_settings["line_darken"] = 0.15
+                calc_settings["line_darken"] = 0.12
+                calc_settings["denoise"] = 0.0
                 calc_settings["deband"] = True
             elif orig_h >= 1440:
                 problems.append(f"High Resolution master ({orig_w}x{orig_h}) - applying calibrated neural edge clarity & debanding")
@@ -724,11 +765,11 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
             if is_mixed_dynamic_range:
                 problems.append(f"Mixed Dynamic Range: Timeline has both dark night scenes ({min_scene_luma:.1f} IRE) and bright morning/daylight scenes ({max_scene_luma:.1f} IRE)")
                 enhancements.append("Smart Scene Dynamic Range Protection active: calibrated S-curve rolloff preserves deep inky blacks while stopping daylight burnout")
-                calc_settings["brightness"] = 0.004
-                calc_settings["gamma"] = 1.030
-                calc_settings["contrast"] = 1.080
+                calc_settings["brightness"] = 0.003
+                calc_settings["gamma"] = 1.025
+                calc_settings["contrast"] = 1.070
                 calc_settings["saturation"] = 1.160
-                calc_settings["sharpness"] = 0.65
+                calc_settings["sharpness"] = 0.75 if not is_anime else 0.65
                 calc_settings["exposure"] = 0.0
             elif max_scene_luma < 55.0 or (p50 < 45 and mean_luma < 55):
                 problems.append(f"Uniform Low-Key / Night Scene Theme (Mean Luma: {mean_luma:.1f} IRE)")
@@ -737,7 +778,7 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
                 calc_settings["gamma"] = 1.040
                 calc_settings["contrast"] = 1.060
                 calc_settings["saturation"] = 1.150
-                calc_settings["sharpness"] = 0.65
+                calc_settings["sharpness"] = 0.75 if not is_anime else 0.65
                 calc_settings["exposure"] = 0.0
             elif min_scene_luma > 105.0 or (p1 > 22 and p50 > 65):
                 problems.append(f"Elevated black floor / hazy telecine wash (Black level: {p1:.0f})")
@@ -765,19 +806,25 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
             else:
                 calc_settings["temp"] = 0
 
-            # 5. Noise & Compression
-            if noise_level > 3.5:
-                problems.append(f"Visible compression/analog noise (Noise index: {noise_level:.1f})")
-                enhancements.append("Adaptive spatial denoise (2.8) with gradient debanding")
-                calc_settings["denoise"] = 2.8
-                calc_settings["deband"] = True
-            elif orig_h <= 576:
-                calc_settings["denoise"] = 2.5
-                calc_settings["deband"] = True
-            else:
-                enhancements.append("Pristine gradient debanding with cel line preservation")
+            # 5. Noise & Compression Strategy
+            if not is_anime:
+                # Never apply spatial smear to real nature, water, or photography
                 calc_settings["denoise"] = 0.0
-                calc_settings["deband"] = True
+                calc_settings["deband"] = False
+                enhancements.append("Organic microtextures (foliage, water, bark) protected without spatial blur")
+            else:
+                if noise_level > 4.5:
+                    problems.append(f"Visible compression/analog noise in anime cel (Noise index: {noise_level:.1f})")
+                    enhancements.append("Adaptive cel denoise (1.6) with gradient debanding")
+                    calc_settings["denoise"] = 1.6
+                    calc_settings["deband"] = True
+                elif orig_h <= 576:
+                    calc_settings["denoise"] = 1.0 if noise_level > 3.0 else 0.0
+                    calc_settings["deband"] = True
+                else:
+                    enhancements.append("Pristine gradient debanding with cel line preservation")
+                    calc_settings["denoise"] = 0.0
+                    calc_settings["deband"] = True
 
             return {
                 "success": True,

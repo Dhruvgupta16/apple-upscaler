@@ -98,9 +98,9 @@
   --text-dim: #94a3b8;
   --text-muted: #64748b;
   
-  --font-sans: 'Outfit', sans-serif;
-  --font-display: 'Space Grotesk', 'Outfit', sans-serif;
-  --font-mono: 'JetBrains Mono', monospace;
+  --font-sans: 'Bahnschrift', 'Space Grotesk', 'Plus Jakarta Sans', 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-display: 'Bahnschrift', 'Space Grotesk', 'Outfit', sans-serif;
+  --font-mono: 'Cascadia Code', 'JetBrains Mono', 'Consolas', monospace;
   
   --radius-sm: 6px;
   --radius-md: 10px;
@@ -921,27 +921,29 @@ img:not([src]), img[src=""], img[src="#"] {
 }
 
 .studio-card {
-  background: linear-gradient(180deg, #181d2c 0%, #10131d 100%);
+  background: linear-gradient(180deg, #151926 0%, #0d101a 100%);
   backdrop-filter: blur(28px);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-top: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 12px;
   padding: 16px 18px;
   display: flex;
   flex-direction: column;
   gap: 14px;
   box-shadow: 
-    0 12px 32px rgba(0, 0, 0, 0.7), 
-    inset 0 1px 0 rgba(255, 255, 255, 0.18), 
-    inset 0 -1px 0 rgba(0, 0, 0, 0.5);
+    0 14px 36px rgba(0, 0, 0, 0.75), 
+    inset 0 1px 0 rgba(255, 255, 255, 0.16), 
+    inset 0 0 24px rgba(0, 0, 0, 0.45);
   position: relative;
   transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .studio-card:hover {
   border-color: rgba(255, 255, 255, 0.22);
+  border-top-color: rgba(244, 63, 94, 0.5);
   box-shadow: 
-    0 16px 40px rgba(0, 0, 0, 0.75), 
+    0 18px 44px rgba(0, 0, 0, 0.8), 
     inset 0 1px 0 rgba(255, 255, 255, 0.24), 
-    0 0 20px rgba(244, 63, 94, 0.10);
+    0 0 24px rgba(244, 63, 94, 0.12);
 }
 .card-head {
   display: flex;
