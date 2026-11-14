@@ -599,13 +599,26 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
 
     # ================= CORE FILTER & RETRO CRT PIPELINE =================
     def build_filter_graph(self, item, settings, for_preview=False):
-        contrast = float(settings.get("contrast", 1.140))
-        gamma = float(settings.get("gamma", 0.880))
-        sat = float(settings.get("saturation", 1.260))
-        sharp = float(settings.get("sharpness", 0.800))
-        brightness = float(settings.get("brightness", -0.018))
+        contrast = float(settings.get("contrast", 1.060))
+        gamma = float(settings.get("gamma", 1.040))
+        sat = float(settings.get("saturation", 1.150))
+        sharp = float(settings.get("sharpness", 0.600))
+        brightness = float(settings.get("brightness", 0.005))
         exposure = float(settings.get("exposure", 0.0))
         
+        # Luma-adaptive black floor protection for dark/night anime scenes
+        try:
+            sample_src = self.cached_source_file if hasattr(self, "cached_source_file") and os.path.exists(self.cached_source_file) else None
+            if sample_src:
+                with Image.open(sample_src) as s_im:
+                    stat = ImageStat.Stat(s_im.resize((64, 36)).convert("L"))
+                    if stat.mean[0] < 60.0:
+                        brightness = max(brightness, 0.010)
+                        gamma = max(gamma, 1.060)
+                        contrast = min(contrast, 1.080)
+        except Exception:
+            pass
+
         lift_master = float(settings.get("lift_master", 0.0))
         gamma_master = float(settings.get("gamma_master", 0.0))
         gain_master = float(settings.get("gain_master", 0.0))
@@ -683,7 +696,7 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
             chain.append("deband=range=16:blur=true")
 
         eff_bright = brightness + (exposure * 0.05)
-        eff_gamma = max(0.4, gamma - (exposure * 0.08))
+        eff_gamma = max(0.4, gamma + (exposure * 0.08))
         chain.append(f"eq=contrast={contrast:.3f}:brightness={eff_bright:.3f}:gamma={eff_gamma:.3f}:saturation={sat:.3f}")
 
         tot_rs = round(lift_r + (temp * 0.005), 3)
@@ -1092,65 +1105,81 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
         if not os.path.exists(base_input):
             return []
 
+        # Detect dark/night anime scenes to ensure rich, open shadow detail without black crush
+        is_dark_scene = False
+        try:
+            with Image.open(base_input) as b_im:
+                stat = ImageStat.Stat(b_im.resize((64, 36)).convert("L"))
+                if stat.mean[0] < 60.0:
+                    is_dark_scene = True
+        except Exception:
+            pass
+
         presets = [
             {
                 "id": "cel_master",
                 "name": "Studio Cel Reference",
                 "tag": "Natural Cel",
                 "desc": "Calibrated studio telecine balance, crisp original cel contours, reference neutral contrast.",
-                "settings": {"contrast": 1.050, "brightness": -0.010, "gamma": 0.950, "saturation": 1.050, "sharpness": 0.50, "denoise": 2.0, "temp": 0, "exposure": 0.0, "crt_scanlines": False, "vhs_mode": False}
+                "settings": {"contrast": 1.020, "brightness": 0.015, "gamma": 1.050, "saturation": 1.050, "sharpness": 0.50, "denoise": 2.0, "temp": 0, "exposure": 0.0, "crt_scanlines": False, "vhs_mode": False}
             },
             {
                 "id": "film_35mm",
                 "name": "35mm Golden Cinema Film",
                 "tag": "Warm Analog Film",
                 "desc": "Rich warm golden amber print, 35mm organic film grain, soft warm highlight roll-off.",
-                "settings": {"contrast": 1.200, "brightness": -0.010, "gamma": 0.900, "saturation": 1.400, "sharpness": 0.50, "denoise": 1.0, "grain": 0.25, "temp": 35, "exposure": 0.05, "crt_scanlines": False, "vhs_mode": False}
+                "settings": {"contrast": 1.080, "brightness": 0.010, "gamma": 1.080, "saturation": 1.350, "sharpness": 0.50, "denoise": 1.0, "grain": 0.25, "temp": 35, "exposure": 0.05, "crt_scanlines": False, "vhs_mode": False}
             },
             {
                 "id": "hdr_pop",
                 "name": "Vivid Neon Anime Pop",
-                "tag": "Punchy HDR",
-                "desc": "High-impact dynamic contrast, deep obsidian blacks, and glowing saturated anime primaries.",
-                "settings": {"contrast": 1.450, "brightness": -0.025, "gamma": 0.760, "saturation": 1.850, "sharpness": 0.85, "denoise": 2.5, "temp": 2, "exposure": 0.10, "crt_scanlines": False, "vhs_mode": False}
+                "tag": "Punchy Neon",
+                "desc": "High-impact vibrant pop, luminous lifted shadows, and glowing electric anime primaries.",
+                "settings": {"contrast": 1.100, "brightness": 0.020, "gamma": 1.120, "saturation": 1.650, "sharpness": 0.85, "denoise": 2.5, "temp": 2, "exposure": 0.08, "crt_scanlines": False, "vhs_mode": False}
             },
             {
                 "id": "retro_crt",
                 "name": "90s Trinitron CRT Television",
                 "tag": "Phosphor Tube",
                 "desc": "Authentic Sony Trinitron aperture grille RGB phosphor triads, scanlines, and tube bloom.",
-                "settings": {"contrast": 1.180, "brightness": 0.005, "gamma": 0.880, "saturation": 1.350, "sharpness": 0.50, "denoise": 1.5, "temp": 8, "exposure": 0.0, "crt_scanlines": True, "crt_intensity": 0.75, "crt_curve": True, "vhs_mode": False}
+                "settings": {"contrast": 1.060, "brightness": 0.025, "gamma": 1.150, "saturation": 1.300, "sharpness": 0.50, "denoise": 1.5, "temp": 8, "exposure": 0.0, "crt_scanlines": True, "crt_intensity": 0.65, "crt_curve": True, "vhs_mode": False}
             },
             {
                 "id": "vhs_tape",
                 "name": "Physical NTSC VHS Cassette",
                 "tag": "Analog Tape",
                 "desc": "Genuine NTSC demodulation, horizontal chroma smear, luma ringing, and helical head tracking band.",
-                "settings": {"contrast": 1.180, "brightness": -0.010, "gamma": 0.920, "saturation": 1.450, "sharpness": 0.60, "denoise": 1.0, "temp": 6, "exposure": 0.0, "crt_scanlines": False, "vhs_mode": True, "vhs_tape_speed": "lp", "head_switching": True, "head_switching_height": 24, "head_switching_shift": 90, "vhs_edge_wave_enabled": True}
+                "settings": {"contrast": 1.080, "brightness": 0.015, "gamma": 1.080, "saturation": 1.400, "sharpness": 0.60, "denoise": 1.0, "temp": 6, "exposure": 0.0, "crt_scanlines": False, "vhs_mode": True, "vhs_tape_speed": "lp", "head_switching": True, "head_switching_height": 24, "head_switching_shift": 90, "vhs_edge_wave_enabled": True}
             },
             {
                 "id": "oled_clean",
-                "name": "Midnight Cyber Noir",
+                "name": "Moonlight Silver Night",
                 "tag": "Cold Moonlit",
-                "desc": "Cool cyan/blue moonlit palette, razor-clean debanded shadows, and dramatic obsidian contrast.",
-                "settings": {"contrast": 1.380, "brightness": -0.030, "gamma": 0.800, "saturation": 1.100, "sharpness": 0.85, "denoise": 3.5, "temp": -28, "exposure": -0.05, "crt_scanlines": False, "vhs_mode": False}
+                "desc": "Cool cyan/silver moonlit palette, luminous shadow lift, and rich debanded gradients.",
+                "settings": {"contrast": 1.050, "brightness": 0.025, "gamma": 1.140, "saturation": 1.150, "sharpness": 0.85, "denoise": 3.5, "temp": -28, "exposure": 0.02, "crt_scanlines": False, "vhs_mode": False}
             }
         ]
 
         def render_preset(p):
             try:
                 s = p["settings"]
-                c = float(s.get("contrast", 1.14))
-                b = float(s.get("brightness", -0.018))
-                g = float(s.get("gamma", 0.88))
-                sat = float(s.get("saturation", 1.26))
+                c = float(s.get("contrast", 1.06))
+                b = float(s.get("brightness", 0.015))
+                g = float(s.get("gamma", 1.05))
+                sat = float(s.get("saturation", 1.20))
                 sharp = float(s.get("sharpness", 0.60))
                 temp = float(s.get("temp", 0.0))
                 grain = float(s.get("grain", 0.0))
                 
+                # Shadow floor protection for night scenes
+                if is_dark_scene:
+                    b = max(b, 0.015)
+                    g = max(g, 1.08)
+                    c = min(c, 1.08)
+
                 chain = [
                     f"eq=contrast={c:.2f}:brightness={b:.3f}:gamma={g:.2f}:saturation={sat:.2f}",
-                    f"scale=540:-2:flags=bicubic"
+                    f"scale=720:-2:flags=bicubic"
                 ]
                 if abs(temp) > 1:
                     if temp > 0:
@@ -1172,7 +1201,7 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
                     "ffmpeg", "-y", "-i", base_input,
                     "-vf", vf_str,
                     "-vframes", "1", "-an", "-sn",
-                    "-f", "image2", "-c:v", "mjpeg", "-q:v", "3", "pipe:1"
+                    "-f", "image2", "-c:v", "mjpeg", "-q:v", "2", "pipe:1"
                 ]
                 r = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, **WIN_FLAGS)
                 
@@ -1184,7 +1213,7 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
                 if s.get("crt_scanlines"):
                     import io
                     t_img = Image.open(io.BytesIO(thumb_bytes)).convert("RGB")
-                    c_img = self.apply_authentic_crt_shader(t_img, intensity=0.80)
+                    c_img = self.apply_authentic_crt_shader(t_img, intensity=0.65)
                     buf = io.BytesIO()
                     c_img.save(buf, format="JPEG", quality=90)
                     thumb_bytes = buf.getvalue()

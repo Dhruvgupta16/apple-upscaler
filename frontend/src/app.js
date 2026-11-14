@@ -7,11 +7,11 @@ let state = {
   currentSec: 0,
   curtainPct: 50,
   settings: {
-    contrast: 1.140,
-    gamma: 0.880,
-    saturation: 1.260,
-    sharpness: 0.800,
-    brightness: -0.018,
+    contrast: 1.060,
+    gamma: 1.040,
+    saturation: 1.150,
+    sharpness: 0.600,
+    brightness: 0.005,
     exposure: 0.0,
     temp: 0.0,
     tint: 0.0,
@@ -792,6 +792,7 @@ async function refreshFrame() {
         imgA.style.display = 'block';
         imgB.style.opacity = '1';
         imgA.style.opacity = '1';
+        imgA.style.filter = 'none';
         document.getElementById('tagSource').innerText = res.name_b;
         document.getElementById('tagRemaster').innerText = res.name_a;
         document.getElementById('lblFrameTech').innerText = "A/B Neural vs Traditional Scaler Compare";
@@ -813,6 +814,7 @@ async function refreshFrame() {
       imgA.style.display = 'block';
       imgB.style.opacity = '1';
       imgA.style.opacity = '1';
+      imgA.style.filter = 'none'; // Ensure CSS live grade does not compound on newly rendered frame
       document.getElementById('canvasBounds').style.display = 'inline-flex';
       
       let isSplit = (state.viewMode === 'split');
@@ -865,6 +867,7 @@ function onFrameLoaded() {
   loader.style.display = 'none';
   imgB.style.opacity = '1';
   imgA.style.opacity = '1';
+  imgA.style.filter = 'none'; // Clear compound grading filter on loaded frame
 
   if (state.viewMode === 'split' || state.viewMode === 'ab_compare') {
     div.style.display = 'block';
@@ -1267,14 +1270,14 @@ function onToggleParam(key, checked) {
 // =========================================================================
 function quickApplyPreset(presetId) {
   let presets = {
-    apple_master: {"contrast": 1.140, "brightness": -0.018, "gamma": 0.880, "saturation": 1.260, "sharpness": 0.80, "denoise": 3.0, "temp": 0, "exposure": 0.0, "crt_scanlines": false, "vhs_mode": false, "crt_curve": false},
-    cel_master: {"contrast": 1.140, "brightness": -0.018, "gamma": 0.880, "saturation": 1.260, "sharpness": 0.80, "denoise": 3.0, "temp": 0, "exposure": 0.0, "crt_scanlines": false, "vhs_mode": false, "crt_curve": false},
-    film_35mm: {"contrast": 1.080, "brightness": -0.010, "gamma": 0.940, "saturation": 1.120, "sharpness": 0.50, "denoise": 1.5, "temp": 14, "exposure": 0.0, "crt_scanlines": false, "vhs_mode": false, "crt_curve": false},
-    ink_sharp: {"contrast": 1.180, "brightness": -0.020, "gamma": 0.860, "saturation": 1.220, "sharpness": 1.00, "denoise": 4.5, "temp": 0, "exposure": 0.0, "crt_scanlines": false, "vhs_mode": false, "crt_curve": false},
-    hdr_pop: {"contrast": 1.250, "brightness": -0.028, "gamma": 0.840, "saturation": 1.380, "sharpness": 0.85, "denoise": 2.5, "temp": 0, "exposure": 0.1, "crt_scanlines": false, "vhs_mode": false, "crt_curve": false},
-    retro_crt: {"contrast": 1.120, "brightness": 0.005, "gamma": 0.900, "saturation": 1.320, "sharpness": 0.60, "denoise": 2.0, "temp": 8, "exposure": 0.0, "crt_scanlines": true, "vhs_mode": false, "crt_curve": true},
-    vhs_tape: {"contrast": 1.150, "brightness": -0.010, "gamma": 0.920, "saturation": 1.280, "sharpness": 0.70, "denoise": 1.0, "temp": 6, "exposure": 0.0, "crt_scanlines": false, "vhs_mode": true, "crt_curve": false, "vhs_chroma": 2.8, "vhs_ringing": 0.35, "vhs_tracking": true, "vhs_edge_wave": true},
-    oled_clean: {"contrast": 1.160, "brightness": -0.015, "gamma": 0.880, "saturation": 1.180, "sharpness": 0.80, "denoise": 3.5, "temp": -10, "exposure": 0.0, "crt_scanlines": false, "vhs_mode": false, "crt_curve": false}
+    apple_master: {"contrast": 1.060, "brightness": 0.005, "gamma": 1.040, "saturation": 1.150, "sharpness": 0.60, "denoise": 2.5, "temp": 0, "exposure": 0.0, "crt_scanlines": false, "vhs_mode": false, "crt_curve": false},
+    cel_master: {"contrast": 1.020, "brightness": 0.015, "gamma": 1.050, "saturation": 1.050, "sharpness": 0.50, "denoise": 2.0, "temp": 0, "exposure": 0.0, "crt_scanlines": false, "vhs_mode": false, "crt_curve": false},
+    film_35mm: {"contrast": 1.080, "brightness": 0.010, "gamma": 1.080, "saturation": 1.350, "sharpness": 0.50, "denoise": 1.0, "temp": 35, "exposure": 0.05, "crt_scanlines": false, "vhs_mode": false, "crt_curve": false},
+    ink_sharp: {"contrast": 1.060, "brightness": 0.010, "gamma": 1.050, "saturation": 1.200, "sharpness": 1.00, "denoise": 3.5, "temp": 0, "exposure": 0.0, "crt_scanlines": false, "vhs_mode": false, "crt_curve": false},
+    hdr_pop: {"contrast": 1.100, "brightness": 0.020, "gamma": 1.120, "saturation": 1.650, "sharpness": 0.85, "denoise": 2.5, "temp": 2, "exposure": 0.08, "crt_scanlines": false, "vhs_mode": false, "crt_curve": false},
+    retro_crt: {"contrast": 1.060, "brightness": 0.025, "gamma": 1.150, "saturation": 1.300, "sharpness": 0.50, "denoise": 1.5, "temp": 8, "exposure": 0.0, "crt_scanlines": true, "crt_intensity": 0.65, "vhs_mode": false, "crt_curve": true},
+    vhs_tape: {"contrast": 1.080, "brightness": 0.015, "gamma": 1.080, "saturation": 1.400, "sharpness": 0.60, "denoise": 1.0, "temp": 6, "exposure": 0.0, "crt_scanlines": false, "vhs_mode": true, "crt_curve": false, "vhs_tape_speed": "lp", "head_switching": true, "head_switching_height": 24, "head_switching_shift": 90, "vhs_edge_wave_enabled": true},
+    oled_clean: {"contrast": 1.050, "brightness": 0.025, "gamma": 1.140, "saturation": 1.150, "sharpness": 0.85, "denoise": 3.5, "temp": -28, "exposure": 0.02, "crt_scanlines": false, "vhs_mode": false, "crt_curve": false}
   };
 
   let p = presets[presetId];
@@ -1474,7 +1477,7 @@ function onToggleDeleteOriginal(checked) {
 function resetSlidersToDefault() {
   pushHistory("Reset to Calibrated Defaults");
   let defs = {
-    contrast: 1.140, brightness: -0.018, gamma: 0.880, saturation: 1.260, sharpness: 0.800,
+    contrast: 1.060, brightness: 0.005, gamma: 1.040, saturation: 1.150, sharpness: 0.600,
     exposure: 0.0, temp: 0, tint: 0, denoise: 3.0, grain: 0.0, deband: true, edge_clean: true,
     deinterlace: false, lut_mode: "none", lut_intensity: 1.0, crt_scanlines: false, vhs_mode: false,
     crt_curve: false, vhs_tape_speed: "lp", vhs_chroma_loss: 0.0025, vhs_chroma_vert_blend: true,
