@@ -618,7 +618,8 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
         crt_scanlines = settings.get("crt_scanlines", False)
         crt_intensity = float(settings.get("crt_intensity", 0.35))
         vhs_mode = settings.get("vhs_mode", False)
-        vhs_chroma = float(settings.get("vhs_chroma", 2.0))
+        vhs_chroma = float(settings.get("vhs_chroma", 2.8))
+        vhs_ringing = float(settings.get("vhs_ringing", 0.35))
         line_darken = float(settings.get("line_darken", 0.0))
         cel_deflicker = settings.get("cel_deflicker", False)
 
@@ -688,13 +689,21 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
         if grain > 0.01 and not for_preview:
             chain.append(f"noise=alls={int(grain * 25)}:allf=t+u")
 
-        # RETRO CRT SCANLINES & VHS TAPE EFFECT
+        # RETRO CRT SCANLINES & AUTHENTIC NTSC VHS TAPE EFFECT
         if crt_scanlines and not for_preview:
             chain.append(f"drawgrid=width=10000:height=4:thickness=1:color=black@{crt_intensity:.2f}")
             
-        if vhs_mode and not for_preview:
-            s_val = int(vhs_chroma)
-            chain.append(f"rgbashift=rh={-s_val}:bh={s_val}:rv=1:bv=-1")
+        if vhs_mode:
+            s_val = max(1, int(round(vhs_chroma)))
+            la_val = min(1.5, max(0.2, vhs_ringing * 2.0))
+            # Authentic NTSC composite demodulation:
+            # 1. Horizontal luma unsharp (edge peaking / ringing overshoot)
+            # 2. Horizontal chroma blur (color-under lowpass smear)
+            chain.append(f"unsharp=lx=5:ly=1:la={la_val:.2f}:cx=7:cy=1:ca=-0.60")
+            # 3. Horizontal chroma subcarrier delay
+            chain.append(f"rgbashift=rh={-s_val}:bh={s_val}:rv=0:bv=0")
+            if not for_preview:
+                chain.append("noise=c0s=2:c1s=5:c2s=5:allf=t+u")
 
         lut_file = None
         if lut_mode == "custom" and self.custom_lut_path and os.path.exists(self.custom_lut_path):
@@ -1402,14 +1411,14 @@ body {
   transform: translateY(-1px);
 }
 .btn-action.suggest {
-  background: rgba(82, 70, 234, 0.15);
-  border-color: rgba(82, 70, 234, 0.5);
-  color: #c7d2fe;
+  background: rgba(225, 29, 72, 0.15);
+  border-color: rgba(225, 29, 72, 0.45);
+  color: #fecdd3;
 }
 .btn-action.suggest:hover {
   background: var(--accent-primary);
   color: #ffffff;
-  box-shadow: 0 0 20px rgba(82, 70, 234, 0.45);
+  box-shadow: 0 0 20px rgba(225, 29, 72, 0.45);
 }
 
 /* VIEWPORT AREA */
@@ -1550,41 +1559,61 @@ img:not([src]), img[src=""], img[src="#"] {
   bottom: 0;
   left: 0;
   width: 100%;
-  height: 22px;
+  height: 14px;
   pointer-events: none;
-  z-index: 23;
+  z-index: 25;
   display: none;
-  background: repeating-linear-gradient(
-    90deg,
-    rgba(255, 255, 255, 0.45) 0px,
-    rgba(20, 20, 20, 0.90) 3px,
-    rgba(220, 220, 220, 0.60) 7px,
-    rgba(10, 10, 10, 0.85) 12px,
-    rgba(255, 255, 255, 0.70) 16px,
-    rgba(30, 30, 30, 0.95) 22px
-  );
+  background: 
+    repeating-linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.85) 0px,
+      rgba(0, 240, 255, 0.70) 3px,
+      rgba(15, 15, 15, 0.98) 7px,
+      rgba(255, 0, 180, 0.75) 12px,
+      rgba(255, 255, 255, 0.90) 16px,
+      rgba(0, 0, 0, 0.98) 22px,
+      rgba(255, 230, 0, 0.70) 28px
+    ),
+    repeating-linear-gradient(
+      0deg,
+      rgba(0, 0, 0, 0.9) 0px,
+      rgba(255, 255, 255, 0.4) 1px,
+      rgba(0, 0, 0, 0.9) 2px
+    );
   mix-blend-mode: hard-light;
-  animation: vhsHeadSwitching 0.12s steps(4) infinite alternate;
-  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.8);
-  opacity: 0.85;
+  animation: vhsHeadSwitching 0.09s steps(3) infinite alternate;
+  box-shadow: 0 -2px 6px rgba(0, 0, 0, 0.85);
+  opacity: 0.92;
 }
 
 @keyframes vhsHeadSwitching {
-  0% { transform: translateY(0px) scaleX(1.0); filter: contrast(200%) brightness(120%); }
-  50% { transform: translateY(-2px) scaleX(1.02); filter: contrast(180%) brightness(140%); }
-  100% { transform: translateY(1px) scaleX(0.98); filter: contrast(240%) brightness(110%); }
+  0% { transform: translateY(0px) scaleX(1.0) skewX(-4deg); filter: contrast(240%) brightness(130%); }
+  33% { transform: translateY(-1px) scaleX(1.03) skewX(6deg); filter: contrast(280%) brightness(160%); }
+  66% { transform: translateY(1px) scaleX(0.98) skewX(-2deg); filter: contrast(210%) brightness(110%); }
+  100% { transform: translateY(-2px) scaleX(1.02) skewX(4deg); filter: contrast(260%) brightness(140%); }
 }
 
 .vhs-jitter {
-  animation: ntscTapeJitter 0.18s steps(2) infinite;
+  animation: ntscTapeJitter 0.14s steps(2) infinite;
 }
 
 @keyframes ntscTapeJitter {
   0% { transform: translate(0, 0); }
-  25% { transform: translate(-0.75px, 0.25px); }
-  50% { transform: translate(0.5px, -0.25px); }
-  75% { transform: translate(-0.25px, 0); }
-  100% { transform: translate(0.5px, 0); }
+  25% { transform: translate(-0.6px, 0.2px); }
+  50% { transform: translate(0.4px, -0.2px); }
+  75% { transform: translate(-0.2px, 0.1px); }
+  100% { transform: translate(0.3px, 0); }
+}
+
+.vhs-edge-wave {
+  animation: ntscTapeWave 0.22s ease-in-out infinite alternate !important;
+}
+
+@keyframes ntscTapeWave {
+  0% { transform: skewX(0deg) translateX(0px); }
+  33% { transform: skewX(0.08deg) translateX(0.4px); }
+  66% { transform: skewX(-0.06deg) translateX(-0.35px); }
+  100% { transform: skewX(0.05deg) translateX(0.25px); }
 }
 
 .select-nav-media {
@@ -2041,6 +2070,12 @@ img:not([src]), img[src=""], img[src="#"] {
   color: #ffffff;
   border-color: var(--accent-primary);
 }
+.chip-preset.active {
+  background: var(--accent-primary) !important;
+  color: #ffffff !important;
+  border-color: var(--accent-primary) !important;
+  box-shadow: 0 0 10px rgba(225, 29, 72, 0.45);
+}
 
 /* ================= 3-WAY COLOR WHEELS (DAVINCI STYLE) ================= */
 .color-wheels-container {
@@ -2449,35 +2484,41 @@ img:not([src]), img[src=""], img[src="#"] {
       0 0 0 1 0" />
   </filter>
   <filter id="vhsChromaFilter" x="-10%" y="-10%" width="120%" height="120%">
-    <!-- Authentic NTSC VHS Chroma Subcarrier Horizontal Smear & Delay -->
+    <!-- Authentic NTSC VHS Composite Luma Peaking & Color-Under Smear -->
+    <!-- 1. Horizontal Luma Ringing Overshoot (Convolution Kernel [-k, 1+2k, -k]) -->
+    <feConvolveMatrix id="vhsLumaConvolve" order="3 1" kernelMatrix="-0.35 1.70 -0.35" preserveAlpha="true" in="SourceGraphic" result="luma_peaked"/>
+    
+    <!-- 2. NTSC Color-Under Chroma Separation & Horizontal Smear -->
     <feColorMatrix type="matrix" values="
       1 0 0 0 0
       0 0 0 0 0
       0 0 0 0 0
-      0 0 0 1 0" in="SourceGraphic" result="red"/>
-    <feOffset id="vhsRedOffset" dx="-3.5" dy="0" in="red" result="red_shift"/>
-    <feGaussianBlur stdDeviation="2.0 0" in="red_shift" result="red_smear"/>
+      0 0 0 1 0" in="luma_peaked" result="red_chan"/>
+    <feOffset id="vhsRedOffset" dx="-2.8" dy="0" in="red_chan" result="red_shift"/>
+    <feGaussianBlur stdDeviation="3.2 0" in="red_shift" result="red_smear"/>
 
     <feColorMatrix type="matrix" values="
       0 0 0 0 0
       0 1 0 0 0
       0 0 0 0 0
-      0 0 0 1 0" in="SourceGraphic" result="green"/>
+      0 0 0 1 0" in="luma_peaked" result="green_chan"/>
 
     <feColorMatrix type="matrix" values="
       0 0 0 0 0
       0 0 0 0 0
       0 0 1 0 0
-      0 0 0 1 0" in="SourceGraphic" result="blue"/>
-    <feOffset id="vhsBlueOffset" dx="3.5" dy="0" in="blue" result="blue_shift"/>
-    <feGaussianBlur stdDeviation="2.5 0" in="blue_shift" result="blue_smear"/>
+      0 0 0 1 0" in="luma_peaked" result="blue_chan"/>
+    <feOffset id="vhsBlueOffset" dx="2.8" dy="0" in="blue_chan" result="blue_shift"/>
+    <feGaussianBlur stdDeviation="3.6 0" in="blue_shift" result="blue_smear"/>
 
-    <feBlend mode="screen" in="red_smear" in2="green" result="rg"/>
-    <feBlend mode="screen" in="rg" in2="blue_smear" result="vhs_rgb"/>
+    <feBlend mode="screen" in="red_smear" in2="green_chan" result="rg_blend"/>
+    <feBlend mode="screen" in="rg_blend" in2="blue_smear" result="vhs_rgb"/>
+
+    <!-- 3. NTSC Tape Warmth Transfer -->
     <feComponentTransfer in="vhs_rgb">
-      <feFuncR type="linear" slope="1.06" intercept="0.015"/>
-      <feFuncG type="linear" slope="1.00" intercept="0.01"/>
-      <feFuncB type="linear" slope="0.94" intercept="0.02"/>
+      <feFuncR type="linear" slope="1.05" intercept="0.01"/>
+      <feFuncG type="linear" slope="1.00" intercept="0.008"/>
+      <feFuncB type="linear" slope="0.94" intercept="0.015"/>
     </feComponentTransfer>
   </filter>
 </svg>
@@ -2540,6 +2581,22 @@ img:not([src]), img[src=""], img[src="#"] {
           <span id="lblPotPlayerBtn">Watch Remastered</span>
         </button>
 
+        <!-- UNDO & REDO -->
+        <button class="btn-action" id="btnUndo" onclick="undo()" title="Undo last change (Ctrl+Z)" style="opacity: 0.45; pointer-events: none;">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="1 4 1 10 7 10"></polyline>
+            <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+          </svg>
+          Undo
+        </button>
+        <button class="btn-action" id="btnRedo" onclick="redo()" title="Redo last change (Ctrl+Y / Ctrl+Shift+Z)" style="opacity: 0.45; pointer-events: none;">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="23 4 23 10 17 10"></polyline>
+            <path d="M20.49 15a9 9 0 1 1-2.13-9.36L23 10"></path>
+          </svg>
+          Redo
+        </button>
+
         <!-- SAVE / LOAD PRESET -->
         <button class="btn-action" onclick="saveCustomPreset()" title="Save current grading preset to file">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -2583,11 +2640,12 @@ img:not([src]), img[src=""], img[src="#"] {
         
         <div class="layer-after-clip" id="afterClip">
           <img class="layer-after" id="imgAfter" style="display:none;" onload="this.style.display='block';" onerror="this.style.display='none';" />
+          <!-- VHS HEAD-SWITCHING TRACKING BAND AT BOTTOM OF REMASTERED FRAME -->
+          <div class="vhs-tracking-band" id="vhsTrackingBand"></div>
         </div>
 
-        <!-- CRT & VHS OVERLAYS -->
+        <!-- CRT OVERLAYS -->
         <div class="crt-overlay" id="crtOverlay"></div>
-        <div class="vhs-tracking-band" id="vhsTrackingBand"></div>
 
         <div class="curtain-divider" id="curtainDivider">
           <div class="curtain-knob">
@@ -2712,14 +2770,18 @@ img:not([src]), img[src=""], img[src="#"] {
 
       <!-- ONE-CLICK QUICK PRESETS -->
       <div class="studio-card">
-        <div class="card-title">Color Grading Profiles</div>
+        <div class="card-head">
+          <span class="card-title">Color Grading Profiles</span>
+          <button class="btn-reset-link" onclick="resetSlidersToDefault()" title="Revert to calibrated default settings">Revert to Default</button>
+        </div>
         <div class="quick-preset-bar">
-          <button class="chip-preset" onclick="quickApplyPreset('cel_master')">Apple Master</button>
-          <button class="chip-preset" onclick="quickApplyPreset('film_35mm')">35mm Film</button>
-          <button class="chip-preset" onclick="quickApplyPreset('ink_sharp')">Ink 4K</button>
-          <button class="chip-preset" onclick="quickApplyPreset('hdr_pop')">HDR Pop</button>
-          <button class="chip-preset" onclick="quickApplyPreset('retro_crt')">90s CRT</button>
-          <button class="chip-preset" onclick="quickApplyPreset('oled_clean')">OLED Clean</button>
+          <button class="chip-preset" id="preset_apple_master" onclick="quickApplyPreset('apple_master')">Apple Master</button>
+          <button class="chip-preset" id="preset_film_35mm" onclick="quickApplyPreset('film_35mm')">35mm Film</button>
+          <button class="chip-preset" id="preset_ink_sharp" onclick="quickApplyPreset('ink_sharp')">Ink 4K</button>
+          <button class="chip-preset" id="preset_hdr_pop" onclick="quickApplyPreset('hdr_pop')">HDR Pop</button>
+          <button class="chip-preset" id="preset_retro_crt" onclick="quickApplyPreset('retro_crt')">90s CRT</button>
+          <button class="chip-preset" id="preset_vhs_tape" onclick="quickApplyPreset('vhs_tape')">VHS Tape</button>
+          <button class="chip-preset" id="preset_oled_clean" onclick="quickApplyPreset('oled_clean')">OLED Clean</button>
         </div>
       </div>
 
@@ -2936,14 +2998,17 @@ img:not([src]), img[src=""], img[src="#"] {
 
       <div class="studio-card">
         <div class="card-head">
-          <span class="card-title">VHS Tape Analog Emulation</span>
-          <span style="font-size: 10px; color: var(--accent-rose); font-weight: 700;">TAPE ARTIFACTS</span>
+          <span class="card-title">NTSC VHS Tape Simulation</span>
+          <span style="font-size: 10px; color: var(--accent-rose); font-weight: 700;">NTSC-RS INSPIRED</span>
+        </div>
+        <div style="font-size: 11px; color: var(--text-sub); line-height: 1.4;">
+          Authentic NTSC tape simulation: composite luma ringing overshoot, color-under horizontal chroma smear, and helical head-switching tracking distortion.
         </div>
 
         <div class="toggle-row">
           <div class="toggle-label-wrap">
             <div class="toggle-title">VHS Tape Analog Mode</div>
-            <div class="toggle-desc">Prism RGB color fringing and analog tape tracking</div>
+            <div class="toggle-desc">Composite demodulation & analog tape tracking</div>
           </div>
           <label class="toggle-switch">
             <input type="checkbox" id="chkVhsMode" onchange="onToggleVHSMode(this.checked)">
@@ -2953,11 +3018,42 @@ img:not([src]), img[src=""], img[src="#"] {
 
         <div class="slider-row">
           <div class="slider-meta">
-            <span>Chromatic Aberration (Prism Fringe)</span>
-            <span class="slider-val" id="valVhsChroma">2.0 px</span>
+            <span>NTSC Luma Ringing & Peaking</span>
+            <span class="slider-val" id="valVhsRinging">35%</span>
           </div>
-          <input type="range" class="slider-bar" id="slVhsChroma" min="1.0" max="6.0" step="0.5" value="2.0"
+          <input type="range" class="slider-bar" id="slVhsRinging" min="0.10" max="0.75" step="0.05" value="0.35"
+                 oninput="onVhsRingingChange(this.value)">
+        </div>
+
+        <div class="slider-row">
+          <div class="slider-meta">
+            <span>Chroma Smear & Horizontal Delay</span>
+            <span class="slider-val" id="valVhsChroma">2.8 px</span>
+          </div>
+          <input type="range" class="slider-bar" id="slVhsChroma" min="1.0" max="6.0" step="0.5" value="2.8"
                  oninput="onVhsChromaChange(this.value)">
+        </div>
+
+        <div class="toggle-row">
+          <div class="toggle-label-wrap">
+            <div class="toggle-title">Head-Switching Tracking Distortion</div>
+            <div class="toggle-desc">Bottom helical scanhead sync jitter & static burst band</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="chkVhsTracking" checked onchange="onToggleVhsTracking(this.checked)">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="toggle-row">
+          <div class="toggle-label-wrap">
+            <div class="toggle-title">Tape Edge Wave (Wow & Flutter)</div>
+            <div class="toggle-desc">Analog capstan transport micro-flutter ripples</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="chkVhsEdgeWave" checked onchange="onToggleVhsEdgeWave(this.checked)">
+            <span class="toggle-slider"></span>
+          </label>
         </div>
       </div>
 
@@ -3329,7 +3425,10 @@ let state = {
     crt_intensity: 0.35,
     crt_curve: false,
     vhs_mode: false,
-    vhs_chroma: 2.0,
+    vhs_chroma: 2.8,
+    vhs_ringing: 0.35,
+    vhs_tracking: true,
+    vhs_edge_wave: true,
     line_darken: 0.0,
     cel_deflicker: false,
     audio_eq: false
@@ -3359,8 +3458,10 @@ async function startApp() {
 
     setupCurtainDivider();
     setupKeyboardShortcuts();
+    setupHistoryInteractionListeners();
     updateBatchQueueUI();
     updateFolderNav();
+    updateUndoRedoButtonsState();
 
     if (state.activeIndex >= 0 && state.queue.length > 0) {
       await selectMedia(state.activeIndex);
@@ -3413,8 +3514,12 @@ function updateFolderNav() {
   }
 }
 
+// =========================================================================
+// UNDO / REDO HISTORY ENGINE (CTRL+Z & CTRL+Y)
+// =========================================================================
 let historyUndoStack = [];
 let historyRedoStack = [];
+let preInteractionSettings = null;
 
 function pushHistory(desc) {
   historyUndoStack.push({
@@ -3423,11 +3528,57 @@ function pushHistory(desc) {
   });
   if (historyUndoStack.length > 50) historyUndoStack.shift();
   historyRedoStack = [];
+  updateUndoRedoButtonsState();
+}
+
+function updateUndoRedoButtonsState() {
+  const u = document.getElementById('btnUndo');
+  const r = document.getElementById('btnRedo');
+  if (u) {
+    u.style.opacity = historyUndoStack.length > 0 ? '1' : '0.45';
+    u.style.pointerEvents = historyUndoStack.length > 0 ? 'auto' : 'none';
+  }
+  if (r) {
+    r.style.opacity = historyRedoStack.length > 0 ? '1' : '0.45';
+    r.style.pointerEvents = historyRedoStack.length > 0 ? 'auto' : 'none';
+  }
+}
+
+function setupHistoryInteractionListeners() {
+  document.addEventListener('pointerdown', (e) => {
+    if (e.target && (e.target.matches('input[type="range"]') || e.target.closest('.color-wheel-pad') || e.target.closest('.wheel-disc-inner'))) {
+      if (!preInteractionSettings) {
+        preInteractionSettings = JSON.parse(JSON.stringify(state.settings));
+      }
+    }
+  }, true);
+
+  document.addEventListener('pointerup', (e) => {
+    if (preInteractionSettings) {
+      let changed = false;
+      for (let k in preInteractionSettings) {
+        if (preInteractionSettings[k] !== state.settings[k]) {
+          changed = true;
+          break;
+        }
+      }
+      if (changed) {
+        historyUndoStack.push({
+          desc: "Adjust Controls",
+          settings: preInteractionSettings
+        });
+        if (historyUndoStack.length > 50) historyUndoStack.shift();
+        historyRedoStack = [];
+        updateUndoRedoButtonsState();
+      }
+      preInteractionSettings = null;
+    }
+  }, true);
 }
 
 function undo() {
   if (historyUndoStack.length === 0) {
-    showToast("Nothing to undo");
+    showToast("Already at default state — nothing to undo");
     return;
   }
   historyRedoStack.push({
@@ -3439,6 +3590,7 @@ function undo() {
   syncAllInputsFromSettings();
   updateLiveGPUGrade();
   refreshFrame();
+  updateUndoRedoButtonsState();
   showToast(`↩️ Undid: ${prev.desc}`);
 }
 
@@ -3456,6 +3608,7 @@ function redo() {
   syncAllInputsFromSettings();
   updateLiveGPUGrade();
   refreshFrame();
+  updateUndoRedoButtonsState();
   showToast(`↪️ Redid: ${nxt.desc}`);
 }
 
@@ -3482,12 +3635,20 @@ function syncAllInputsFromSettings() {
   setText('valDenoise', s.denoise.toFixed(1));
   setVal('slSharpness', s.sharpness);
   setText('valSharpness', s.sharpness.toFixed(2));
+  setVal('slGrain', s.grain || 0.0);
+  setText('valGrain', (s.grain || 0.0).toFixed(2));
+  setVal('slLineDarken', s.line_darken || 0.0);
+  setText('valLineDarken', (s.line_darken || 0.0).toFixed(2));
 
+  // CRT Scanlines & Screen Curve
   if (document.getElementById('chkCrtScanlines')) {
     document.getElementById('chkCrtScanlines').checked = !!s.crt_scanlines;
     const crt = document.getElementById('crtOverlay');
     if (crt) crt.style.display = s.crt_scanlines ? 'block' : 'none';
   }
+  setVal('slCrtIntensity', s.crt_intensity || 0.35);
+  setText('valCrtIntensity', `${Math.round((s.crt_intensity || 0.35) * 100)}%`);
+
   if (document.getElementById('chkCrtCurve')) {
     document.getElementById('chkCrtCurve').checked = !!s.crt_curve;
     const b = document.getElementById('canvasBounds');
@@ -3496,11 +3657,53 @@ function syncAllInputsFromSettings() {
       else b.classList.remove('crt-curved');
     }
   }
+
+  // NTSC VHS Mode & Sliders
   if (document.getElementById('chkVhsMode')) {
     document.getElementById('chkVhsMode').checked = !!s.vhs_mode;
     const band = document.getElementById('vhsTrackingBand');
-    if (band) band.style.display = s.vhs_mode ? 'block' : 'none';
+    if (band) {
+      const trackingOn = s.vhs_tracking !== false;
+      band.style.display = (s.vhs_mode && trackingOn) ? 'block' : 'none';
+    }
+    const imgAfter = document.getElementById('imgAfter');
+    if (imgAfter) {
+      if (s.vhs_mode) {
+        imgAfter.classList.add('vhs-jitter');
+        if (s.vhs_edge_wave !== false) imgAfter.classList.add('vhs-edge-wave');
+      } else {
+        imgAfter.classList.remove('vhs-jitter');
+        imgAfter.classList.remove('vhs-edge-wave');
+      }
+    }
+    const clip = document.getElementById('afterClip');
+    if (clip) {
+      if (s.vhs_mode) clip.style.filter = 'url(#vhsChromaFilter)';
+      else clip.style.filter = 'none';
+    }
   }
+  setVal('slVhsRinging', s.vhs_ringing !== undefined ? s.vhs_ringing : 0.35);
+  setText('valVhsRinging', `${Math.round((s.vhs_ringing !== undefined ? s.vhs_ringing : 0.35) * 100)}%`);
+  setVal('slVhsChroma', s.vhs_chroma !== undefined ? s.vhs_chroma : 2.8);
+  setText('valVhsChroma', `${(s.vhs_chroma !== undefined ? s.vhs_chroma : 2.8).toFixed(1)} px`);
+  if (document.getElementById('chkVhsTracking')) {
+    document.getElementById('chkVhsTracking').checked = s.vhs_tracking !== false;
+  }
+  if (document.getElementById('chkVhsEdgeWave')) {
+    document.getElementById('chkVhsEdgeWave').checked = s.vhs_edge_wave !== false;
+  }
+
+  // Checkboxes
+  if (document.getElementById('chkCelDeflicker')) {
+    document.getElementById('chkCelDeflicker').checked = !!s.cel_deflicker;
+  }
+  if (document.getElementById('chkAudioEQ')) {
+    document.getElementById('chkAudioEQ').checked = !!s.audio_eq;
+  }
+
+  // Color Wheels indicator pucks
+  updateWheelPositionsFromSettings();
+  updateUndoRedoButtonsState();
 }
 
 async function prevMedia() {
@@ -3691,77 +3894,21 @@ function updateLiveGPUGrade() {
 
   let filterStr = `contrast(${contPct}%) saturate(${satPct}%) brightness(${brightPct}%) url(#liveGrade)`;
   if (s.vhs_mode) {
-    let ch = s.vhs_chroma || 2.5;
-    const rOff = document.getElementById('vhsRedOffset');
-    const bOff = document.getElementById('vhsBlueOffset');
-    if (rOff) rOff.setAttribute('dx', (-ch * 1.2).toFixed(1));
-    if (bOff) bOff.setAttribute('dx', (ch * 1.2).toFixed(1));
+    updateVHSFilter();
     filterStr += ` url(#vhsChromaFilter)`;
   }
   imgAfter.style.filter = filterStr;
 }
 
 // =========================================================================
-// RETRO CRT & VHS SIMULATION (INTERACTIVE GPU TOGGLES)
+// RETRO CRT & AUTHENTIC NTSC VHS SIMULATION (INTERACTIVE GPU TOGGLES)
 // =========================================================================
 function onToggleCRTScanlines(checked) {
-  state.settings.crt_scanlines = checked;
-  const overlay = document.getElementById('crtOverlay');
-  overlay.style.display = checked ? 'block' : 'none';
-  showToast(checked ? "CRT Scanlines enabled" : "CRT Scanlines disabled");
-}
-
-function onCrtIntensityChange(val) {
-  val = parseFloat(val);
-  state.settings.crt_intensity = val;
-  document.getElementById('valCrtIntensity').innerText = `${Math.round(val * 100)}%`;
-  const overlay = document.getElementById('crtOverlay');
-  overlay.style.opacity = (val * 1.5).toString();
-}
-
-function onToggleCRTCurve(checked) {
-  state.settings.crt_curve = checked;
-  const bounds = document.getElementById('canvasBounds');
-  if (checked) bounds.classList.add('crt-curved');
-  else bounds.classList.remove('crt-curved');
-  showToast(checked ? "Curved glass tube monitor enabled" : "Flat canvas enabled");
-}
-
-function onToggleVHSMode(checked) {
-  state.settings.vhs_mode = checked;
-  const imgAfter = document.getElementById('imgAfter');
-  const clip = document.getElementById('afterClip');
-  const band = document.getElementById('vhsTrackingBand');
-  
-  if (band) band.style.display = checked ? 'block' : 'none';
-  if (imgAfter) {
-    if (checked) imgAfter.classList.add('vhs-jitter');
-    else imgAfter.classList.remove('vhs-jitter');
-  }
-  if (clip) {
-    if (checked) clip.style.filter = 'url(#vhsChromaFilter)';
-    else clip.style.filter = 'none';
-  }
-  updateLiveGPUGrade();
-  showToast(checked ? "NTSC VHS Analog Tape Mode active" : "VHS Mode disabled");
-}
-
-function onVhsChromaChange(val) {
-  val = parseFloat(val);
-  state.settings.vhs_chroma = val;
-  const lbl = document.getElementById('valVhsChroma');
-  if (lbl) lbl.innerText = `${val.toFixed(1)} px`;
-  const rOff = document.getElementById('vhsRedOffset');
-  const bOff = document.getElementById('vhsBlueOffset');
-  if (rOff) rOff.setAttribute('dx', (-val).toFixed(1));
-  if (bOff) bOff.setAttribute('dx', val.toFixed(1));
-}
-
-function onToggleCRTScanlines(checked) {
+  pushHistory(checked ? "Enable Trinitron CRT Scanlines" : "Disable CRT Scanlines");
   state.settings.crt_scanlines = checked;
   const overlay = document.getElementById('crtOverlay');
   if (overlay) overlay.style.display = checked ? 'block' : 'none';
-  showToast(checked ? "Trinitron CRT Phosphor Triads enabled" : "CRT scanlines disabled");
+  showToast(checked ? "Trinitron CRT Phosphor Triads active" : "CRT Scanlines disabled");
 }
 
 function onCrtIntensityChange(val) {
@@ -3774,6 +3921,7 @@ function onCrtIntensityChange(val) {
 }
 
 function onToggleCRTCurve(checked) {
+  pushHistory(checked ? "Enable Curved Tube Monitor" : "Disable Curved Monitor");
   state.settings.crt_curve = checked;
   const bounds = document.getElementById('canvasBounds');
   if (bounds) {
@@ -3783,9 +3931,89 @@ function onToggleCRTCurve(checked) {
   showToast(checked ? "Curved glass tube monitor enabled" : "Flat canvas enabled");
 }
 
+function onToggleVHSMode(checked) {
+  pushHistory(checked ? "Enable NTSC VHS Simulation" : "Disable VHS Mode");
+  state.settings.vhs_mode = checked;
+  const imgAfter = document.getElementById('imgAfter');
+  const clip = document.getElementById('afterClip');
+  const band = document.getElementById('vhsTrackingBand');
+  
+  if (band) {
+    const trackingOn = state.settings.vhs_tracking !== false;
+    band.style.display = (checked && trackingOn) ? 'block' : 'none';
+  }
+  if (imgAfter) {
+    if (checked) {
+      imgAfter.classList.add('vhs-jitter');
+      if (state.settings.vhs_edge_wave !== false) imgAfter.classList.add('vhs-edge-wave');
+    } else {
+      imgAfter.classList.remove('vhs-jitter');
+      imgAfter.classList.remove('vhs-edge-wave');
+    }
+  }
+  if (clip) {
+    if (checked) clip.style.filter = 'url(#vhsChromaFilter)';
+    else clip.style.filter = 'none';
+  }
+  updateVHSFilter();
+  updateLiveGPUGrade();
+  showToast(checked ? "NTSC VHS Analog Tape Mode active" : "VHS Mode disabled");
+}
+
+function onVhsRingingChange(val) {
+  val = parseFloat(val);
+  state.settings.vhs_ringing = val;
+  const lbl = document.getElementById('valVhsRinging');
+  if (lbl) lbl.innerText = `${Math.round(val * 100)}%`;
+  updateVHSFilter();
+}
+
+function onVhsChromaChange(val) {
+  val = parseFloat(val);
+  state.settings.vhs_chroma = val;
+  const lbl = document.getElementById('valVhsChroma');
+  if (lbl) lbl.innerText = `${val.toFixed(1)} px`;
+  updateVHSFilter();
+}
+
+function onToggleVhsTracking(checked) {
+  pushHistory(checked ? "Enable Head-Switching Band" : "Disable Head-Switching Band");
+  state.settings.vhs_tracking = checked;
+  const band = document.getElementById('vhsTrackingBand');
+  if (band) band.style.display = (state.settings.vhs_mode && checked) ? 'block' : 'none';
+}
+
+function onToggleVhsEdgeWave(checked) {
+  pushHistory(checked ? "Enable Tape Edge Wave" : "Disable Tape Edge Wave");
+  state.settings.vhs_edge_wave = checked;
+  const imgAfter = document.getElementById('imgAfter');
+  if (imgAfter) {
+    if (state.settings.vhs_mode && checked) imgAfter.classList.add('vhs-edge-wave');
+    else imgAfter.classList.remove('vhs-edge-wave');
+  }
+}
+
+function updateVHSFilter(ringingVal, chromaVal) {
+  let rStrength = ringingVal !== undefined ? parseFloat(ringingVal) : (state.settings.vhs_ringing !== undefined ? state.settings.vhs_ringing : 0.35);
+  let cOffset = chromaVal !== undefined ? parseFloat(chromaVal) : (state.settings.vhs_chroma !== undefined ? state.settings.vhs_chroma : 2.8);
+
+  const convolve = document.getElementById('vhsLumaConvolve');
+  if (convolve) {
+    let k = rStrength;
+    let center = (1.0 + 2.0 * k).toFixed(2);
+    let neg = (-k).toFixed(2);
+    convolve.setAttribute('kernelMatrix', `${neg} ${center} ${neg}`);
+  }
+  const rOff = document.getElementById('vhsRedOffset');
+  const bOff = document.getElementById('vhsBlueOffset');
+  if (rOff) rOff.setAttribute('dx', (-cOffset).toFixed(1));
+  if (bOff) bOff.setAttribute('dx', cOffset.toFixed(1));
+}
+
 function onToggleAudioEQ(checked) {
+  pushHistory(checked ? "Enable Dialogue Clarity EQ" : "Disable Dialogue Clarity EQ");
   state.settings.audio_eq = checked;
-  showToast(checked ? "Audio dialogue presence & hiss filter enabled" : "Audio filter disabled");
+  showToast(checked ? "Audio dialogue presence & hiss filter active" : "Audio filter disabled");
 }
 
 // =========================================================================
@@ -4116,9 +4344,9 @@ function resetSingleWheel(type) {
   state.settings[`${type}_b`] = 0.0;
   state.settings[`${type}_master`] = 0.0;
   const puck = document.getElementById(`puck${type.charAt(0).toUpperCase() + type.slice(1)}`);
-  puck.style.left = '50%';
-  puck.style.top = '50%';
-  document.getElementById(`sl${type.charAt(0).toUpperCase() + type.slice(1)}Master`).value = 0;
+  if (puck) { puck.style.left = '50%'; puck.style.top = '50%'; }
+  const sl = document.getElementById(`sl${type.charAt(0).toUpperCase() + type.slice(1)}Master`);
+  if (sl) sl.value = 0;
   const badge = document.getElementById(`lbl${type.charAt(0).toUpperCase() + type.slice(1)}Readout`);
   if (badge) badge.innerText = "R0 G0 B0";
   updateLiveGPUGrade();
@@ -4126,8 +4354,44 @@ function resetSingleWheel(type) {
 }
 
 function resetColorWheels() {
+  pushHistory("Reset 3-Way Color Wheels");
   ['lift', 'gamma', 'gain'].forEach(t => resetSingleWheel(t));
   showToast("Reset 3-way color wheels to neutral");
+}
+
+function updateWheelPositionsFromSettings() {
+  ['lift', 'gamma', 'gain'].forEach(type => {
+    const puck = document.getElementById(`puck${type.charAt(0).toUpperCase() + type.slice(1)}`);
+    const wheel = document.getElementById(`wheel${type.charAt(0).toUpperCase() + type.slice(1)}`);
+    const badge = document.getElementById(`lbl${type.charAt(0).toUpperCase() + type.slice(1)}Readout`);
+    const r = state.settings[`${type}_r`] || 0;
+    const g = state.settings[`${type}_g`] || 0;
+    const b = state.settings[`${type}_b`] || 0;
+    const master = state.settings[`${type}_master`] || 0;
+    const slMaster = document.getElementById(`sl${type.charAt(0).toUpperCase() + type.slice(1)}Master`);
+    if (slMaster) slMaster.value = master;
+
+    if (badge) {
+      badge.innerText = `R${r >= 0 ? '+' : ''}${Math.round(r*100)} G${g >= 0 ? '+' : ''}${Math.round(g*100)} B${b >= 0 ? '+' : ''}${Math.round(b*100)}`;
+    }
+    if (puck && wheel) {
+      const radius = wheel.offsetWidth ? wheel.offsetWidth / 2 : 45;
+      if (Math.abs(r) < 0.001 && Math.abs(g) < 0.001 && Math.abs(b) < 0.001) {
+        puck.style.left = '50%';
+        puck.style.top = '50%';
+      } else {
+        let dx = (r - (g + b) / 2) * (radius / 0.35);
+        let dy = ((g - b) * 0.866) * (radius / 0.35);
+        let dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist > radius - 6) {
+          dx = (dx / dist) * (radius - 6);
+          dy = (dy / dist) * (radius - 6);
+        }
+        puck.style.left = `${radius + dx}px`;
+        puck.style.top = `${radius + dy}px`;
+      }
+    }
+  });
 }
 
 function roundVal(v) { return Math.round(v * 1000) / 1000; }
@@ -4166,41 +4430,33 @@ function onToggleParam(key, checked) {
 // =========================================================================
 function quickApplyPreset(presetId) {
   let presets = {
-    apple_master: {"contrast": 1.140, "brightness": -0.018, "gamma": 0.880, "saturation": 1.260, "sharpness": 0.80, "denoise": 3.0, "temp": 0, "exposure": 0.0, "crt_scanlines": false, "vhs_mode": false},
-    cel_master: {"contrast": 1.140, "brightness": -0.018, "gamma": 0.880, "saturation": 1.260, "sharpness": 0.80, "denoise": 3.0, "temp": 0, "exposure": 0.0, "crt_scanlines": false, "vhs_mode": false},
-    film_35mm: {"contrast": 1.080, "brightness": -0.010, "gamma": 0.940, "saturation": 1.120, "sharpness": 0.50, "denoise": 1.5, "temp": 14, "exposure": 0.0, "crt_scanlines": false, "vhs_mode": false},
-    ink_sharp: {"contrast": 1.180, "brightness": -0.020, "gamma": 0.860, "saturation": 1.220, "sharpness": 1.00, "denoise": 4.5, "temp": 0, "exposure": 0.0, "crt_scanlines": false, "vhs_mode": false},
-    hdr_pop: {"contrast": 1.250, "brightness": -0.028, "gamma": 0.840, "saturation": 1.380, "sharpness": 0.85, "denoise": 2.5, "temp": 0, "exposure": 0.1, "crt_scanlines": false, "vhs_mode": false},
-    retro_crt: {"contrast": 1.120, "brightness": 0.005, "gamma": 0.900, "saturation": 1.320, "sharpness": 0.60, "denoise": 2.0, "temp": 8, "exposure": 0.0, "crt_scanlines": true, "vhs_mode": false},
-    oled_clean: {"contrast": 1.160, "brightness": -0.015, "gamma": 0.880, "saturation": 1.180, "sharpness": 0.80, "denoise": 3.5, "temp": -10, "exposure": 0.0, "crt_scanlines": false, "vhs_mode": false}
+    apple_master: {"contrast": 1.140, "brightness": -0.018, "gamma": 0.880, "saturation": 1.260, "sharpness": 0.80, "denoise": 3.0, "temp": 0, "exposure": 0.0, "crt_scanlines": false, "vhs_mode": false, "crt_curve": false},
+    cel_master: {"contrast": 1.140, "brightness": -0.018, "gamma": 0.880, "saturation": 1.260, "sharpness": 0.80, "denoise": 3.0, "temp": 0, "exposure": 0.0, "crt_scanlines": false, "vhs_mode": false, "crt_curve": false},
+    film_35mm: {"contrast": 1.080, "brightness": -0.010, "gamma": 0.940, "saturation": 1.120, "sharpness": 0.50, "denoise": 1.5, "temp": 14, "exposure": 0.0, "crt_scanlines": false, "vhs_mode": false, "crt_curve": false},
+    ink_sharp: {"contrast": 1.180, "brightness": -0.020, "gamma": 0.860, "saturation": 1.220, "sharpness": 1.00, "denoise": 4.5, "temp": 0, "exposure": 0.0, "crt_scanlines": false, "vhs_mode": false, "crt_curve": false},
+    hdr_pop: {"contrast": 1.250, "brightness": -0.028, "gamma": 0.840, "saturation": 1.380, "sharpness": 0.85, "denoise": 2.5, "temp": 0, "exposure": 0.1, "crt_scanlines": false, "vhs_mode": false, "crt_curve": false},
+    retro_crt: {"contrast": 1.120, "brightness": 0.005, "gamma": 0.900, "saturation": 1.320, "sharpness": 0.60, "denoise": 2.0, "temp": 8, "exposure": 0.0, "crt_scanlines": true, "vhs_mode": false, "crt_curve": true},
+    vhs_tape: {"contrast": 1.150, "brightness": -0.010, "gamma": 0.920, "saturation": 1.280, "sharpness": 0.70, "denoise": 1.0, "temp": 6, "exposure": 0.0, "crt_scanlines": false, "vhs_mode": true, "crt_curve": false, "vhs_chroma": 2.8, "vhs_ringing": 0.35, "vhs_tracking": true, "vhs_edge_wave": true},
+    oled_clean: {"contrast": 1.160, "brightness": -0.015, "gamma": 0.880, "saturation": 1.180, "sharpness": 0.80, "denoise": 3.5, "temp": -10, "exposure": 0.0, "crt_scanlines": false, "vhs_mode": false, "crt_curve": false}
   };
 
   let p = presets[presetId];
   if (!p) return;
+
+  // Snapshot previous settings for undo
+  pushHistory(`Preset: ${presetId.replace('_', ' ').toUpperCase()}`);
+
   for (let k in p) state.settings[k] = p[k];
 
-  document.getElementById('slContrast').value = p.contrast;
-  document.getElementById('valContrast').innerText = p.contrast.toFixed(2);
-  document.getElementById('slSaturation').value = p.saturation;
-  document.getElementById('valSaturation').innerText = p.saturation.toFixed(2);
-  document.getElementById('slGamma').value = p.gamma;
-  document.getElementById('valGamma').innerText = p.gamma.toFixed(2);
-  document.getElementById('slBrightness').value = p.brightness;
-  document.getElementById('valBrightness').innerText = p.brightness.toFixed(3);
-  document.getElementById('slSharpness').value = p.sharpness;
-  document.getElementById('valSharpness').innerText = p.sharpness.toFixed(2);
-  document.getElementById('slTemp').value = p.temp;
-  document.getElementById('valTemp').innerText = `${p.temp > 0 ? '+' : ''}${p.temp}`;
-  document.getElementById('slExposure').value = p.exposure;
-  document.getElementById('valExposure').innerText = `${p.exposure.toFixed(2)} EV`;
+  syncAllInputsFromSettings();
 
-  if (p.crt_scanlines !== undefined) {
-    document.getElementById('chkCrtScanlines').checked = p.crt_scanlines;
-    onToggleCRTScanlines(p.crt_scanlines);
-  }
+  // Highlight active preset chip
+  document.querySelectorAll('.chip-preset').forEach(b => b.classList.remove('active'));
+  const activeBtn = document.getElementById(`preset_${presetId}`);
+  if (activeBtn) activeBtn.classList.add('active');
 
   updateLiveGPUGrade();
-  showToast(`Applied: ${presetId.toUpperCase()}`);
+  showToast(`Applied: ${presetId.replace('_', ' ').toUpperCase()}`);
   refreshFrame();
 }
 
@@ -4211,6 +4467,7 @@ async function triggerColorMatch() {
   showToast("Select a reference image to transfer color grading...");
   let res = await window.pywebview.api.match_color_from_reference_dialog(state.currentSec);
   if (res && res.success) {
+    pushHistory(`AI Color Match: ${res.ref_name || 'Reference'}`);
     state.settings.contrast = res.contrast;
     state.settings.brightness = res.brightness;
     state.settings.saturation = res.saturation;
@@ -4221,13 +4478,7 @@ async function triggerColorMatch() {
     state.settings.lift_g = res.lift_g;
     state.settings.lift_b = res.lift_b;
 
-    document.getElementById('slContrast').value = res.contrast;
-    document.getElementById('valContrast').innerText = res.contrast.toFixed(2);
-    document.getElementById('slBrightness').value = res.brightness;
-    document.getElementById('valBrightness').innerText = res.brightness.toFixed(3);
-    document.getElementById('slSaturation').value = res.saturation;
-    document.getElementById('valSaturation').innerText = res.saturation.toFixed(2);
-
+    syncAllInputsFromSettings();
     updateLiveGPUGrade();
     showToast(`Color matched to '${res.ref_name}'!`);
     refreshFrame();
@@ -4384,44 +4635,25 @@ function onToggleDeleteOriginal(checked) {
 }
 
 function resetSlidersToDefault() {
+  pushHistory("Reset to Calibrated Defaults");
   let defs = {
     contrast: 1.140, brightness: -0.018, gamma: 0.880, saturation: 1.260, sharpness: 0.800,
     exposure: 0.0, temp: 0, tint: 0, denoise: 3.0, grain: 0.0, deband: true, edge_clean: true,
     deinterlace: false, lut_mode: "none", lut_intensity: 1.0, crt_scanlines: false, vhs_mode: false,
-    line_darken: 0.0, cel_deflicker: false, audio_eq: false
+    crt_curve: false, vhs_chroma: 2.8, vhs_ringing: 0.35, vhs_tracking: true, vhs_edge_wave: true,
+    line_darken: 0.0, cel_deflicker: false, audio_eq: false,
+    lift_r: 0.0, lift_g: 0.0, lift_b: 0.0, lift_master: 0.0,
+    gamma_r: 0.0, gamma_g: 0.0, gamma_b: 0.0, gamma_master: 0.0,
+    gain_r: 0.0, gain_g: 0.0, gain_b: 0.0, gain_master: 0.0
   };
   for (let k in defs) state.settings[k] = defs[k];
 
-  document.getElementById('slExposure').value = 0.0;
-  document.getElementById('valExposure').innerText = "0.0 EV";
-  document.getElementById('slContrast').value = 1.14;
-  document.getElementById('valContrast').innerText = "1.14";
-  document.getElementById('slSaturation').value = 1.26;
-  document.getElementById('valSaturation').innerText = "1.26";
-  document.getElementById('slGamma').value = 0.88;
-  document.getElementById('valGamma').innerText = "0.88";
-  document.getElementById('slBrightness').value = -0.018;
-  document.getElementById('valBrightness').innerText = "-0.018";
-  document.getElementById('slTemp').value = 0;
-  document.getElementById('valTemp').innerText = "0";
-  document.getElementById('slSharpness').value = 0.80;
-  document.getElementById('valSharpness').innerText = "0.80";
-  document.getElementById('slDenoise').value = 3.0;
-  document.getElementById('valDenoise').innerText = "3.0";
-  document.getElementById('slGrain').value = 0.0;
-  document.getElementById('valGrain').innerText = "0.00";
-  document.getElementById('slLineDarken').value = 0.0;
-  document.getElementById('valLineDarken').innerText = "0.00";
-  document.getElementById('chkCrtScanlines').checked = false;
-  document.getElementById('chkCrtCurve').checked = false;
-  document.getElementById('chkVhsMode').checked = false;
-  document.getElementById('chkCelDeflicker').checked = false;
-  document.getElementById('chkAudioEQ').checked = false;
+  // Highlight Apple Master chip
+  document.querySelectorAll('.chip-preset').forEach(b => b.classList.remove('active'));
+  const activeBtn = document.getElementById('preset_apple_master');
+  if (activeBtn) activeBtn.classList.add('active');
 
-  onToggleCRTScanlines(false);
-  onToggleCRTCurve(false);
-  onToggleVHSMode(false);
-  resetColorWheels();
+  syncAllInputsFromSettings();
   updateLiveGPUGrade();
   showToast("Restored all sliders to calibrated defaults");
   refreshFrame();
@@ -4480,45 +4712,9 @@ function applyAuditionByIndex(idx) {
 }
 
 function applyAuditionProfile(settings, name) {
+  pushHistory(`Profile: ${name || 'Audition'}`);
   for (let k in settings) state.settings[k] = settings[k];
-
-  if (settings.contrast !== undefined) {
-    document.getElementById('slContrast').value = settings.contrast;
-    document.getElementById('valContrast').innerText = settings.contrast.toFixed(2);
-  }
-  if (settings.saturation !== undefined) {
-    document.getElementById('slSaturation').value = settings.saturation;
-    document.getElementById('valSaturation').innerText = settings.saturation.toFixed(2);
-  }
-  if (settings.gamma !== undefined) {
-    document.getElementById('slGamma').value = settings.gamma;
-    document.getElementById('valGamma').innerText = settings.gamma.toFixed(2);
-  }
-  if (settings.brightness !== undefined) {
-    document.getElementById('slBrightness').value = settings.brightness;
-    document.getElementById('valBrightness').innerText = settings.brightness.toFixed(3);
-  }
-  if (settings.sharpness !== undefined) {
-    document.getElementById('slSharpness').value = settings.sharpness;
-    document.getElementById('valSharpness').innerText = settings.sharpness.toFixed(2);
-  }
-  if (settings.denoise !== undefined) {
-    document.getElementById('slDenoise').value = settings.denoise;
-    document.getElementById('valDenoise').innerText = settings.denoise.toFixed(1);
-  }
-  if (settings.grain !== undefined) {
-    document.getElementById('slGrain').value = settings.grain;
-    document.getElementById('valGrain').innerText = settings.grain.toFixed(2);
-  }
-  if (settings.temp !== undefined) {
-    document.getElementById('slTemp').value = settings.temp;
-    document.getElementById('valTemp').innerText = `${settings.temp > 0 ? '+' : ''}${settings.temp}`;
-  }
-  if (settings.crt_scanlines !== undefined) {
-    document.getElementById('chkCrtScanlines').checked = settings.crt_scanlines;
-    onToggleCRTScanlines(settings.crt_scanlines);
-  }
-
+  syncAllInputsFromSettings();
   closeAuditionModal();
   updateLiveGPUGrade();
   showToast(`Applied '${name}' profile`);
