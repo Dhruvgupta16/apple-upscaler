@@ -1,73 +1,87 @@
 // =========================================================================
-// APPLICATION STATE
+// APPLICATION DEFAULT SETTINGS & STATE
 // =========================================================================
+const DEFAULT_SETTINGS = {
+  contrast: 1.060,
+  gamma: 1.040,
+  saturation: 1.150,
+  sharpness: 0.600,
+  brightness: 0.005,
+  exposure: 0.0,
+  temp: 0.0,
+  tint: 0.0,
+  denoise: 3.0,
+  grain: 0.0,
+  deband: true,
+  edge_clean: true,
+  deinterlace: false,
+  resolution: "1080p",
+  framing: "4:3 Pillarbox",
+  audio_mode: "copy",
+  sub_mode: "copy",
+  export_fmt: "mkv",
+  photo_fmt: "png",
+  gpu: "nvenc_hevc",
+  cq: 20,
+  trim_enabled: false,
+  trim_in: "00:00:00",
+  trim_out: "00:00:00",
+  lut_mode: "none",
+  lut_intensity: 1.0,
+  ai_model: "realesr-animevideov3",
+  delete_original: false,
+  lift_r: 0.0, lift_g: 0.0, lift_b: 0.0, lift_master: 0.0,
+  gamma_r: 0.0, gamma_g: 0.0, gamma_b: 0.0, gamma_master: 0.0,
+  gain_r: 0.0, gain_g: 0.0, gain_b: 0.0, gain_master: 0.0,
+  crt_scanlines: false,
+  crt_intensity: 0.65,
+  crt_curve: false,
+  vhs_mode: false,
+  vhs_tape_speed: "lp",
+  vhs_chroma_loss: 0.05,
+  vhs_chroma_vert_blend: true,
+  vhs_sharpen_enabled: true,
+  vhs_sharpen: 0.50,
+  vhs_sharpen_freq: 1.0,
+  head_switching: true,
+  head_switching_height: 16,
+  head_switching_shift: 80,
+  head_switching_jitter: 0.05,
+  vhs_edge_wave_enabled: true,
+  vhs_edge_wave: 0.5,
+  vhs_edge_wave_speed: 4.0,
+  vhs_ringing: true,
+  vhs_ringing_freq: 0.45,
+  vhs_ringing_power: 4,
+  vhs_chroma_noise: true,
+  vhs_chroma_noise_intensity: 25,
+  vhs_composite_noise: true,
+  vhs_composite_noise_intensity: 15,
+  line_darken: 0.0,
+  cel_deflicker: false,
+  audio_eq: false
+};
+
+const ICONS = {
+  check: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>`,
+  undo: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>`,
+  redo: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.13-9.36L23 10"></path></svg>`,
+  clipboard: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>`,
+  download: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>`,
+  sparkles: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"></path></svg>`,
+  wand: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m15 4 6 6-10 10H5v-6l10-10z"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L20 7l-3-3 1.5-1.5z"></path></svg>`,
+  play: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>`,
+  pause: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>`,
+  info: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>`
+};
+
 let state = {
   queue: [],
   activeIndex: -1,
   currentSec: 0,
   curtainPct: 50,
-  settings: {
-    contrast: 1.060,
-    gamma: 1.040,
-    saturation: 1.150,
-    sharpness: 0.600,
-    brightness: 0.005,
-    exposure: 0.0,
-    temp: 0.0,
-    tint: 0.0,
-    denoise: 3.0,
-    grain: 0.0,
-    deband: true,
-    edge_clean: true,
-    deinterlace: false,
-    resolution: "1080p",
-    framing: "4:3 Pillarbox",
-    audio_mode: "copy",
-    sub_mode: "copy",
-    export_fmt: "mkv",
-    photo_fmt: "png",
-    gpu: "nvenc_hevc",
-    cq: 20,
-    trim_enabled: false,
-    trim_in: "00:00:00",
-    trim_out: "00:00:00",
-    lut_mode: "none",
-    lut_intensity: 1.0,
-    ai_model: "realesr-animevideov3",
-    delete_original: false,
-    lift_r: 0.0, lift_g: 0.0, lift_b: 0.0, lift_master: 0.0,
-    gamma_r: 0.0, gamma_g: 0.0, gamma_b: 0.0, gamma_master: 0.0,
-    gain_r: 0.0, gain_g: 0.0, gain_b: 0.0, gain_master: 0.0,
-    crt_scanlines: false,
-    crt_intensity: 0.70,
-    crt_curve: false,
-    vhs_mode: false,
-    vhs_tape_speed: "lp",
-    vhs_chroma_loss: 0.0025,
-    vhs_chroma_vert_blend: true,
-    vhs_sharpen_enabled: true,
-    vhs_sharpen: 0.25,
-    vhs_sharpen_freq: 1.0,
-    head_switching: true,
-    head_switching_height: 8,
-    head_switching_shift: 72,
-    head_switching_jitter: 0.03,
-    vhs_edge_wave_enabled: true,
-    vhs_edge_wave: 0.5,
-    vhs_edge_wave_speed: 4.0,
-    vhs_ringing: true,
-    vhs_ringing_freq: 0.45,
-    vhs_ringing_power: 4,
-    vhs_chroma_noise: true,
-    vhs_chroma_noise_intensity: 0.10,
-    vhs_composite_noise: true,
-    vhs_composite_noise_intensity: 0.05,
-    line_darken: 0.0,
-    cel_deflicker: false,
-    audio_eq: false
-  },
+  settings: JSON.parse(JSON.stringify(DEFAULT_SETTINGS)),
   viewMode: 'split',
-  curtainPct: 50,
   zoomLevel: 1.0,
   isPlaying: false,
   playInterval: null,
@@ -76,7 +90,8 @@ let state = {
   activeWheel: null,
   isCurtainDragging: false,
   isZoomed: false,
-  auditionCards: []
+  auditionCards: [],
+  pendingAISettings: null
 };
 
 // =========================================================================
@@ -89,8 +104,13 @@ async function startApp() {
     state.activeIndex = init.active_index;
     
     if (init.branding) {
-      if (init.branding.app_name) document.getElementById('lblAppName').innerText = init.branding.app_name;
-      if (init.branding.app_edition) document.getElementById('lblAppEdition').innerText = init.branding.app_edition;
+      const appNameEl = document.getElementById('lblAppName');
+      if (appNameEl && init.branding.app_name) appNameEl.innerText = init.branding.app_name;
+      const appEditionEl = document.getElementById('lblAppEdition');
+      if (appEditionEl) {
+        if (init.branding.app_edition) appEditionEl.innerText = init.branding.app_edition;
+        else appEditionEl.style.display = 'none';
+      }
     }
 
     setupCurtainDivider();
@@ -124,11 +144,17 @@ if (window.pywebview && window.pywebview.api) {
   window.addEventListener('pywebviewready', startApp);
 }
 
-function showToast(msg) {
+function showToast(msg, icon = 'check') {
   let t = document.getElementById('toastMsg');
-  document.getElementById('toastText').innerText = msg;
+  let text = document.getElementById('toastText');
+  let iconContainer = document.getElementById('toastIcon');
+  if (!t || !text) return;
+  let cleanMsg = msg.replace(/^[\uD800-\uDBFF\uDC00-\uDFFF\u2000-\u3300]\s*/, '').trim();
+  text.innerText = cleanMsg;
+  if (iconContainer) iconContainer.innerHTML = ICONS[icon] || ICONS.check;
   t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 3500);
+  clearTimeout(window.__toastTimer);
+  window.__toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
 }
 
 // =========================================================================
@@ -228,12 +254,12 @@ function undo() {
   updateLiveGPUGrade();
   refreshFrame();
   updateUndoRedoButtonsState();
-  showToast(`↩️ Undid: ${prev.desc}`);
+  showToast(`Undid: ${prev.desc}`, 'undo');
 }
 
 function redo() {
   if (historyRedoStack.length === 0) {
-    showToast("Nothing to redo");
+    showToast("Nothing to redo", 'info');
     return;
   }
   historyUndoStack.push({
@@ -246,7 +272,7 @@ function redo() {
   updateLiveGPUGrade();
   refreshFrame();
   updateUndoRedoButtonsState();
-  showToast(`↪️ Redid: ${nxt.desc}`);
+  showToast(`Redid: ${nxt.desc}`, 'redo');
 }
 
 function syncAllInputsFromSettings() {
@@ -371,6 +397,150 @@ function syncAllInputsFromSettings() {
   // Color Wheels indicator pucks
   updateWheelPositionsFromSettings();
   updateUndoRedoButtonsState();
+}
+
+// =========================================================================
+// UNIVERSAL & INDIVIDUAL PARAMETER RESET
+// =========================================================================
+function formatParamName(key) {
+  const names = {
+    exposure: "Exposure Compensation",
+    contrast: "Dynamic Contrast",
+    saturation: "Color Saturation",
+    gamma: "Shadow De-Fog (Gamma)",
+    brightness: "Black Pedestal Floor",
+    temp: "Color Temperature",
+    tint: "Color Tint",
+    sharpness: "AMD CAS Line Sharpening",
+    denoise: "Spatial Denoise",
+    grain: "Film Grain",
+    line_darken: "Cel Line Darkening",
+    crt_intensity: "Scanline Intensity",
+    vhs_chroma_loss: "Chroma Loss",
+    vhs_sharpen: "Sharpen Intensity",
+    vhs_sharpen_freq: "Peaking Frequency",
+    head_switching_height: "Head Switching Height",
+    head_switching_shift: "Horizontal Shift",
+    head_switching_jitter: "Mid-Line Jitter",
+    vhs_edge_wave: "Edge Wave Intensity",
+    vhs_edge_wave_speed: "Flutter Speed",
+    vhs_ringing_freq: "Ringing Frequency",
+    vhs_ringing_power: "Ringing Power",
+    vhs_chroma_noise_intensity: "Chroma Noise",
+    vhs_composite_noise_intensity: "Composite Noise",
+    lut_intensity: "LUT Intensity"
+  };
+  return names[key] || key.replace(/_/g, ' ').toUpperCase();
+}
+
+function syncSingleInput(key) {
+  const s = state.settings;
+  const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+  const setText = (id, t) => { const el = document.getElementById(id); if (el) el.innerText = t; };
+
+  switch (key) {
+    case 'exposure':
+      setVal('slExposure', s.exposure);
+      setText('valExposure', `${s.exposure > 0 ? '+' : ''}${s.exposure.toFixed(1)} EV`);
+      break;
+    case 'contrast':
+      setVal('slContrast', s.contrast);
+      setText('valContrast', s.contrast.toFixed(2));
+      break;
+    case 'saturation':
+      setVal('slSaturation', s.saturation);
+      setText('valSaturation', s.saturation.toFixed(2));
+      break;
+    case 'gamma':
+      setVal('slGamma', s.gamma);
+      setText('valGamma', s.gamma.toFixed(2));
+      break;
+    case 'brightness':
+      setVal('slBrightness', s.brightness);
+      setText('valBrightness', s.brightness.toFixed(3));
+      break;
+    case 'temp':
+      setVal('slTemp', s.temp);
+      setText('valTemp', s.temp);
+      break;
+    case 'sharpness':
+      setVal('slSharpness', s.sharpness);
+      setText('valSharpness', s.sharpness.toFixed(2));
+      break;
+    case 'denoise':
+      setVal('slDenoise', s.denoise);
+      setText('valDenoise', s.denoise.toFixed(1));
+      break;
+    case 'grain':
+      setVal('slGrain', s.grain);
+      setText('valGrain', s.grain.toFixed(2));
+      break;
+    case 'crt_intensity':
+      setVal('slCrtIntensity', s.crt_intensity);
+      setText('valCrtIntensity', `${Math.round(s.crt_intensity * 100)}%`);
+      break;
+    case 'vhs_chroma_loss':
+      setVal('slVhsChromaLoss', s.vhs_chroma_loss);
+      setText('valVhsChromaLoss', `${s.vhs_chroma_loss}%`);
+      break;
+    case 'vhs_sharpen':
+      setVal('slVhsSharpen', s.vhs_sharpen);
+      setText('valVhsSharpen', s.vhs_sharpen.toFixed(2));
+      break;
+    case 'head_switching_height':
+      setVal('slHeadHeight', s.head_switching_height);
+      setText('valHeadHeight', `${s.head_switching_height} lines`);
+      break;
+    case 'head_switching_shift':
+      setVal('slHeadShift', s.head_switching_shift);
+      setText('valHeadShift', `${s.head_switching_shift} px`);
+      break;
+    default:
+      syncAllInputsFromSettings();
+      break;
+  }
+}
+
+function resetSingleParam(key) {
+  if (DEFAULT_SETTINGS[key] === undefined) return;
+  pushHistory(`Reset ${formatParamName(key)}`);
+  state.settings[key] = DEFAULT_SETTINGS[key];
+  syncSingleInput(key);
+  updateLiveGPUGrade();
+  showToast(`Reset ${formatParamName(key)} to default`, 'undo');
+  refreshFrame();
+}
+
+function resetCategoryDefaults(catName) {
+  const catMap = {
+    color: ['exposure', 'contrast', 'saturation', 'gamma', 'brightness', 'temp', 'sharpness'],
+    wheels: ['lift_r', 'lift_g', 'lift_b', 'lift_master', 'gamma_r', 'gamma_g', 'gamma_b', 'gamma_master', 'gain_r', 'gain_g', 'gain_b', 'gain_master'],
+    vhs: ['vhs_mode', 'vhs_tape_speed', 'vhs_chroma_loss', 'vhs_chroma_vert_blend', 'vhs_sharpen_enabled', 'vhs_sharpen', 'vhs_sharpen_freq', 'head_switching', 'head_switching_height', 'head_switching_shift', 'head_switching_jitter', 'vhs_edge_wave_enabled', 'vhs_edge_wave', 'vhs_edge_wave_speed', 'vhs_ringing', 'vhs_ringing_freq', 'vhs_ringing_power', 'vhs_chroma_noise', 'vhs_chroma_noise_intensity', 'vhs_composite_noise', 'vhs_composite_noise_intensity'],
+    crt: ['crt_scanlines', 'crt_intensity', 'crt_curve'],
+    restoration: ['denoise', 'grain', 'deband', 'edge_clean', 'line_darken', 'cel_deflicker'],
+    geometry: ['framing', 'resolution']
+  };
+  const keys = catMap[catName];
+  if (!keys) return;
+  pushHistory(`Reset ${catName.toUpperCase()} Defaults`);
+  keys.forEach(k => {
+    if (DEFAULT_SETTINGS[k] !== undefined) state.settings[k] = DEFAULT_SETTINGS[k];
+  });
+  syncAllInputsFromSettings();
+  updateLiveGPUGrade();
+  showToast(`Reset ${catName} section to default`, 'undo');
+  refreshFrame();
+}
+
+function resetAllDefaults() {
+  pushHistory("Reset All Pipeline Defaults");
+  for (let k in DEFAULT_SETTINGS) {
+    state.settings[k] = DEFAULT_SETTINGS[k];
+  }
+  syncAllInputsFromSettings();
+  updateLiveGPUGrade();
+  showToast("Restored all pipeline settings to defaults", 'undo');
+  refreshFrame();
 }
 
 async function prevMedia() {
@@ -930,7 +1100,7 @@ function togglePlayback() {
     if (btn) btn.classList.add('playing');
     if (iconPlay) iconPlay.style.display = 'none';
     if (iconPause) iconPause.style.display = 'block';
-    showToast("▶️ Preview Playback started");
+    showToast("Preview Playback started", "play");
 
     state.playInterval = setInterval(() => {
       let dur = state.queue[state.activeIndex]?.duration || 100;
@@ -1326,22 +1496,187 @@ async function triggerColorMatch() {
 }
 
 // =========================================================================
-// CUSTOM PRESET SAVE / LOAD
+// PRESETS: COPY (CLIPBOARD), EXTRACT (FILE), APPLY (SMART CLIPBOARD/FILE)
 // =========================================================================
-async function saveCustomPreset() {
-  let jsonStr = JSON.stringify(state.settings, null, 2);
+async function copyPresetToClipboard() {
+  let payload = {
+    apple_upscaler_preset: true,
+    version: "2.0",
+    name: "Apple Studio Custom Preset",
+    settings: JSON.parse(JSON.stringify(state.settings))
+  };
+  let jsonStr = JSON.stringify(payload, null, 2);
+  let ok = false;
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(jsonStr);
+      ok = true;
+    }
+  } catch (e) {}
+
+  if (!ok && window.pywebview && window.pywebview.api && window.pywebview.api.copy_text_to_clipboard) {
+    ok = await window.pywebview.api.copy_text_to_clipboard(jsonStr);
+  }
+
+  showToast("Preset copied to clipboard as text!", "clipboard");
+}
+
+async function extractPresetToFile() {
+  let payload = {
+    apple_upscaler_preset: true,
+    version: "2.0",
+    name: "Apple Studio Custom Preset",
+    settings: JSON.parse(JSON.stringify(state.settings))
+  };
+  let jsonStr = JSON.stringify(payload, null, 2);
   let fname = await window.pywebview.api.save_preset_dialog(jsonStr);
   if (fname) {
-    showToast(`Saved preset '${fname}'!`);
+    showToast(`Extracted preset file '${fname}'!`, "download");
   }
 }
 
-async function loadCustomPreset() {
+async function applySmartPreset() {
+  let clipboardText = "";
+  try {
+    if (navigator.clipboard && navigator.clipboard.readText) {
+      clipboardText = await navigator.clipboard.readText();
+    }
+  } catch (e) {}
+
+  if (!clipboardText && window.pywebview && window.pywebview.api && window.pywebview.api.get_clipboard_text) {
+    try {
+      clipboardText = await window.pywebview.api.get_clipboard_text();
+    } catch (e) {}
+  }
+
+  // Parse clipboard text if present
+  let parsedSettings = null;
+  if (clipboardText && clipboardText.trim()) {
+    try {
+      let data = JSON.parse(clipboardText.trim());
+      if (data && typeof data === 'object') {
+        if (data.settings && typeof data.settings === 'object') {
+          parsedSettings = data.settings;
+        } else if (data.contrast !== undefined || data.gamma !== undefined || data.saturation !== undefined) {
+          parsedSettings = data;
+        }
+      }
+    } catch (e) {}
+  }
+
+  if (parsedSettings) {
+    applyAuditionProfile(parsedSettings, "Clipboard Preset");
+    showToast("Applied preset from clipboard text!", "check");
+    return;
+  }
+
+  // Fallback: Open file picker to let user choose preset file
+  showToast("No preset on clipboard. Pick preset file from PC...", "info");
   let res = await window.pywebview.api.load_preset_dialog();
   if (res && res.success && res.settings) {
-    applyAuditionProfile(res.settings, res.name);
-    showToast(`Loaded preset '${res.name}'!`);
+    applyAuditionProfile(res.settings, res.name || "Loaded Preset");
+    showToast(`Loaded preset '${res.name}'!`, "check");
   }
+}
+
+// =========================================================================
+// SMART AI FRAME ANALYSIS & PROBLEM RECOGNITION
+// =========================================================================
+async function triggerAIAutoEnhance() {
+  if (state.activeIndex < 0) {
+    showToast("Load a video or photo first.", "info");
+    return;
+  }
+  showToast("AI analyzing frame & detecting anomalies...", "wand");
+
+  let res = await window.pywebview.api.analyze_and_auto_enhance(state.currentSec);
+  if (!res || !res.success) {
+    showToast(res && res.message ? res.message : "AI analysis failed", "info");
+    return;
+  }
+
+  // Open AI Diagnostic Modal
+  let modal = document.getElementById('aiDiagModal');
+  let body = document.getElementById('aiDiagBody');
+  if (!modal || !body) {
+    if (res.settings) {
+      applyAuditionProfile(res.settings, "AI Auto-Enhance");
+      showToast(`AI Auto-Enhanced: fixed ${res.problems.length} source issues!`, "wand");
+    }
+    return;
+  }
+
+  state.pendingAISettings = res.settings;
+
+  let problemsHtml = (res.problems || []).map(p => `
+    <div class="diag-item problem">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+      <div>${p}</div>
+    </div>
+  `).join('');
+
+  let enhancementsHtml = (res.enhancements || []).map(e => `
+    <div class="diag-item enhancement">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+      <div>${e}</div>
+    </div>
+  `).join('');
+
+  let m = res.metrics || {};
+  body.innerHTML = `
+    <div>
+      <div class="diag-section-title">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+        Identified Anomalies & Deficiencies (${res.problems.length})
+      </div>
+      <div class="diag-list">${problemsHtml || '<div class="diag-item enhancement">No critical issues detected; source is high-fidelity reference.</div>'}</div>
+    </div>
+
+    <div>
+      <div class="diag-section-title">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+        AI Calculated Enhancements (${res.enhancements.length})
+      </div>
+      <div class="diag-list">${enhancementsHtml}</div>
+    </div>
+
+    <div>
+      <div class="diag-section-title">Source Frame Metrics</div>
+      <div class="diag-metrics-row">
+        <div class="diag-metric-box">
+          <span class="diag-metric-label">Resolution</span>
+          <span class="diag-metric-val">${m.resolution || '--'}</span>
+        </div>
+        <div class="diag-metric-box">
+          <span class="diag-metric-label">Mean Luma</span>
+          <span class="diag-metric-val">${m.mean_luma || '--'} IRE</span>
+        </div>
+        <div class="diag-metric-box">
+          <span class="diag-metric-label">Saturation</span>
+          <span class="diag-metric-val">${Math.round((m.mean_sat || 0) * 100)}%</span>
+        </div>
+        <div class="diag-metric-box">
+          <span class="diag-metric-label">Noise Index</span>
+          <span class="diag-metric-val">${m.noise_level || '--'}</span>
+        </div>
+      </div>
+    </div>
+  `;
+
+  modal.style.display = 'flex';
+}
+
+function applyPendingAIEnhancements() {
+  if (state.pendingAISettings) {
+    applyAuditionProfile(state.pendingAISettings, "AI Auto-Enhance");
+    closeAIDiagModal();
+    showToast("Applied AI Calculated Enhancements!", "wand");
+  }
+}
+
+function closeAIDiagModal() {
+  const m = document.getElementById('aiDiagModal');
+  if (m) m.style.display = 'none';
 }
 
 // =========================================================================

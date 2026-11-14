@@ -49,7 +49,7 @@ def get_base_dir():
 def load_branding():
     default_branding = {
         "app_name": "Apple Upscaler",
-        "app_edition": "Neural Pro",
+        "app_edition": "",
         "app_version": "2.2.0",
         "app_tagline": "Universal Anime & Film Neural Remastering Studio",
         "window_title": "Apple Upscaler Pro - Universal Anime & Film AI Remaster",
@@ -465,12 +465,12 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
                 self.active_index = len(self.queue) - 1
         return {"queue": self.queue, "active_index": self.active_index}
 
-    # ================= CUSTOM PRESET SAVE / LOAD =================
+    # ================= CUSTOM PRESET SAVE / LOAD & CLIPBOARD =================
     def save_preset_dialog(self, settings_json):
         if not webview.windows: return False
         win = webview.windows[0]
-        file_types = ('Apple Upscaler Preset (*.applepreset;*.json)', 'All files (*.*)')
-        save_path = win.create_file_dialog(webview.SAVE_DIALOG, save_filename="Anime_Custom_Grade.neopreset", file_types=file_types)
+        file_types = ('Apple Upscaler Preset (*.json;*.applepreset)', 'All files (*.*)')
+        save_path = win.create_file_dialog(webview.SAVE_DIALOG, save_filename="Apple_Studio_Grade.json", file_types=file_types)
         if save_path:
             p = save_path if isinstance(save_path, str) else save_path[0]
             try:
@@ -484,16 +484,244 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
     def load_preset_dialog(self):
         if not webview.windows: return None
         win = webview.windows[0]
-        file_types = ('Apple Upscaler Preset (*.applepreset;*.json)', 'All files (*.*)')
+        file_types = ('Apple Upscaler Preset (*.json;*.applepreset)', 'All files (*.*)')
         files = win.create_file_dialog(webview.OPEN_DIALOG, allow_multiple=False, file_types=file_types)
         if files and len(files) > 0:
             try:
                 with open(files[0], "r", encoding="utf-8") as f:
                     data = json.load(f)
-                return {"success": True, "name": os.path.basename(files[0]), "settings": data}
+                settings = data.get("settings", data) if isinstance(data, dict) else data
+                return {"success": True, "name": os.path.basename(files[0]), "settings": settings}
             except Exception as e:
                 print(f"Load preset error: {e}")
         return None
+
+    def copy_text_to_clipboard(self, text):
+        try:
+            import ctypes
+            CF_UNICODETEXT = 13
+            GMEM_MOVEABLE = 0x0002
+            user32 = ctypes.windll.user32
+            kernel32 = ctypes.windll.kernel32
+
+            kernel32.GlobalAlloc.restype = ctypes.c_void_p
+            kernel32.GlobalAlloc.argtypes = [ctypes.c_uint, ctypes.c_size_t]
+            kernel32.GlobalLock.restype = ctypes.c_void_p
+            kernel32.GlobalLock.argtypes = [ctypes.c_void_p]
+            kernel32.GlobalUnlock.argtypes = [ctypes.c_void_p]
+            user32.OpenClipboard.argtypes = [ctypes.c_void_p]
+            user32.SetClipboardData.restype = ctypes.c_void_p
+            user32.SetClipboardData.argtypes = [ctypes.c_uint, ctypes.c_void_p]
+
+            raw = (str(text) + '\0').encode('utf-16le')
+            h_glb = kernel32.GlobalAlloc(GMEM_MOVEABLE, len(raw))
+            if not h_glb: return False
+            ptr = kernel32.GlobalLock(h_glb)
+            if not ptr: return False
+            ctypes.memmove(ptr, raw, len(raw))
+            kernel32.GlobalUnlock(h_glb)
+            if not user32.OpenClipboard(None): return False
+            user32.EmptyClipboard()
+            user32.SetClipboardData(CF_UNICODETEXT, h_glb)
+            user32.CloseClipboard()
+            return True
+        except Exception as e:
+            print(f"Error copying to clipboard: {e}")
+            return False
+
+    def get_clipboard_text(self):
+        try:
+            import ctypes
+            CF_UNICODETEXT = 13
+            user32 = ctypes.windll.user32
+            kernel32 = ctypes.windll.kernel32
+
+            kernel32.GlobalLock.restype = ctypes.c_void_p
+            kernel32.GlobalLock.argtypes = [ctypes.c_void_p]
+            kernel32.GlobalUnlock.argtypes = [ctypes.c_void_p]
+            user32.OpenClipboard.argtypes = [ctypes.c_void_p]
+            user32.GetClipboardData.restype = ctypes.c_void_p
+            user32.GetClipboardData.argtypes = [ctypes.c_uint]
+
+            if not user32.OpenClipboard(None): return ""
+            h_glb = user32.GetClipboardData(CF_UNICODETEXT)
+            if not h_glb:
+                user32.CloseClipboard()
+                return ""
+            ptr = kernel32.GlobalLock(h_glb)
+            if not ptr:
+                user32.CloseClipboard()
+                return ""
+            text = ctypes.wstring_at(ptr)
+            kernel32.GlobalUnlock(h_glb)
+            user32.CloseClipboard()
+            return text
+        except Exception as e:
+            print(f"Error reading clipboard: {e}")
+            return ""
+
+    # ================= SMART AI FRAME ANALYSIS & PROBLEM RECOGNITION =================
+    def analyze_and_auto_enhance(self, timestamp_sec):
+        if self.active_index < 0:
+            return {"success": False, "message": "No active media loaded"}
+        item = self.queue[self.active_index]
+        is_image = item.get("is_image", False)
+        ts_str = "00:00:00" if is_image else format_time(timestamp_sec)
+
+        # 1. Ensure source frame is extracted
+        if not os.path.exists(self.cached_source_file) or self.cached_media_path != item["path"] or self.cached_ts_str != ts_str:
+            cmd_b = ["ffmpeg", "-y"]
+            if not is_image: cmd_b += ["-ss", ts_str]
+            cmd_b += ["-i", item["path"], "-vframes", "1", "-an", "-sn", "-f", "image2", "-c:v", "mjpeg", "-q:v", "2", self.cached_source_file]
+            subprocess.run(cmd_b, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **WIN_FLAGS)
+            self.cached_media_path = item["path"]
+            self.cached_ts_str = ts_str
+
+        if not os.path.exists(self.cached_source_file):
+            return {"success": False, "message": "Could not access media frame"}
+
+        try:
+            im = Image.open(self.cached_source_file).convert("RGB")
+            w, h = im.size
+
+            gray = im.convert("L")
+            arr_gray = np.array(gray, dtype=np.float32)
+
+            # Luminance distribution
+            p1, p5, p50, p95, p99 = np.percentile(arr_gray, [1, 5, 50, 95, 99])
+            mean_luma = float(np.mean(arr_gray))
+
+            # Laplacian blur / line clarity metric
+            lap = gray.filter(ImageFilter.Kernel((3, 3), [0, 1, 0, 1, -4, 1, 0, 1, 0], scale=1, offset=0))
+            arr_lap = np.array(lap, dtype=np.float32)
+            lap_var = float(np.var(arr_lap))
+
+            # Saturation in HSV
+            hsv = im.convert("HSV")
+            s_arr = np.array(hsv)[:, :, 1] / 255.0
+            mean_sat = float(np.mean(s_arr))
+
+            # Color cast in neutrals
+            rgb_arr = np.array(im, dtype=np.float32)
+            r, g, b = rgb_arr[:, :, 0], rgb_arr[:, :, 1], rgb_arr[:, :, 2]
+            neutral_mask = (np.abs(r - g) < 18) & (np.abs(g - b) < 18) & (arr_gray > 40) & (arr_gray < 210)
+            if np.sum(neutral_mask) > 100:
+                color_cast = float(np.mean(r[neutral_mask]) - np.mean(b[neutral_mask]))
+            else:
+                color_cast = 0.0
+
+            # High-frequency noise level
+            blurred = gray.filter(ImageFilter.BoxBlur(1))
+            diff = np.abs(arr_gray - np.array(blurred, dtype=np.float32))
+            smooth_mask = arr_lap < 12
+            noise_level = float(np.std(diff[smooth_mask])) if np.sum(smooth_mask) > 100 else float(np.std(diff))
+
+            problems = []
+            enhancements = []
+            calc_settings = {}
+
+            # 1. Resolution & Sharpness
+            if h <= 576:
+                problems.append(f"Standard Definition ({w}x{h}) with telecine line softness")
+                enhancements.append("Real-ESRGAN Anime V3 neural upscale to 1080p + AMD CAS 0.80 line clarity")
+                calc_settings["ai_model"] = "realesr-animevideov3"
+                calc_settings["resolution"] = "1080p"
+                calc_settings["sharpness"] = 0.80
+                calc_settings["edge_clean"] = True
+            elif h <= 720:
+                problems.append(f"720p HD with mild line softness (Laplacian score: {lap_var:.0f})")
+                enhancements.append("Target 1080p remaster with AMD CAS 0.70 edge reconstruction")
+                calc_settings["ai_model"] = "realesr-animevideov3"
+                calc_settings["resolution"] = "1080p"
+                calc_settings["sharpness"] = 0.70
+            else:
+                enhancements.append("AMD CAS 0.60 calibrated edge definition")
+                calc_settings["sharpness"] = 0.60
+
+            # 2. Color Saturation
+            if mean_sat < 0.28:
+                problems.append(f"Dull / desaturated anime colors (Average saturation: {int(mean_sat*100)}%)")
+                boosted = round(min(1.45, 1.15 + (0.35 - mean_sat) * 1.5), 2)
+                enhancements.append(f"Restored vibrancy: saturation elevated to {boosted}")
+                calc_settings["saturation"] = boosted
+            elif mean_sat > 0.48:
+                enhancements.append("Preserved rich organic anime saturation (1.08)")
+                calc_settings["saturation"] = 1.08
+            else:
+                enhancements.append("Calibrated natural anime saturation (1.18)")
+                calc_settings["saturation"] = 1.18
+
+            # 3. Dynamic Range & Shadow Protection
+            if p50 < 45 or mean_luma < 55:
+                problems.append(f"Dark/night scene detected (Mean Luma: {mean_luma:.1f} IRE)")
+                enhancements.append("Shadow protection enabled: lifted pedestal (+0.015) & open gamma (1.08) to prevent black crush")
+                calc_settings["brightness"] = 0.015
+                calc_settings["gamma"] = 1.08
+                calc_settings["contrast"] = 1.04
+            elif p1 > 20 and p50 > 60:
+                problems.append(f"Elevated black pedestal floor / hazy shadows (Black level: {p1:.0f})")
+                enhancements.append("Calibrated black floor: contrast 1.12 with deep inky shadows")
+                calc_settings["contrast"] = 1.12
+                calc_settings["brightness"] = -0.005
+                calc_settings["gamma"] = 1.02
+            else:
+                enhancements.append("Calibrated reference dynamic contrast (1.06) & gamma (1.04)")
+                calc_settings["contrast"] = 1.06
+                calc_settings["brightness"] = 0.005
+                calc_settings["gamma"] = 1.04
+
+            # 4. Exposure Headroom
+            if p99 > 252:
+                problems.append("Clipped highlight peaks detected")
+                enhancements.append("Highlights rolled back (Exposure -0.05 EV)")
+                calc_settings["exposure"] = -0.05
+            elif p95 < 175 and mean_luma >= 55:
+                problems.append("Dim overall scene headroom")
+                enhancements.append("Broadcast headroom expanded (+0.10 EV)")
+                calc_settings["exposure"] = 0.10
+            else:
+                calc_settings["exposure"] = 0.0
+
+            # 5. Color Temperature Cast
+            if color_cast > 12:
+                problems.append(f"Warm / amber telecine color cast detected (+{color_cast:.1f})")
+                enhancements.append("Color temperature cooled to neutral studio reference (-8)")
+                calc_settings["temp"] = -8
+            elif color_cast < -12:
+                problems.append(f"Cold / cyan telecine cast detected ({color_cast:.1f})")
+                enhancements.append("Color temperature warmed to balanced daylight (+8)")
+                calc_settings["temp"] = 8
+            else:
+                calc_settings["temp"] = 0
+
+            # 6. Noise & Compression
+            if noise_level > 3.5:
+                problems.append(f"Visible compression/analog noise (Noise index: {noise_level:.1f})")
+                enhancements.append("Adaptive spatial denoise (3.5) with gradient debanding")
+                calc_settings["denoise"] = 3.5
+                calc_settings["deband"] = True
+            else:
+                enhancements.append("Light debanding and micro-noise cleanup")
+                calc_settings["denoise"] = 2.0
+                calc_settings["deband"] = True
+
+            return {
+                "success": True,
+                "problems": problems,
+                "enhancements": enhancements,
+                "settings": calc_settings,
+                "summary": f"Identified {len(problems)} source anomalies and calculated optimized pipeline parameters.",
+                "metrics": {
+                    "resolution": f"{w}x{h}",
+                    "mean_luma": round(mean_luma, 1),
+                    "mean_sat": round(mean_sat, 2),
+                    "lap_var": round(lap_var, 1),
+                    "noise_level": round(noise_level, 2)
+                }
+            }
+        except Exception as err:
+            print(f"Error in analyze_and_auto_enhance: {err}")
+            return {"success": False, "message": str(err)}
 
     # ================= AI COLOR MATCHING (FROM REFERENCE IMAGE) =================
     def match_color_from_reference_dialog(self, timestamp_sec):

@@ -33,7 +33,6 @@
           <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAB0klEQVR4nO2av07DMBDGP3+6oUMREyNrJBb2vgG8ThmYGRnK68AbdGep1JUnQHToVhREUagS50/v4lbn35I2US+27zuf6zOQyWQ8E3Bi3D9f72LPXx8/VNtMOEcsjM4nk1ovvmy3oc37xd1lm/mdpgoCRhyApsHYyz7W+fXb5881h8A5T4LzGmWsnq6int97X9vzSbPA/GAgykGIYdX5khwCSERVBW3ZwRLCOYRzCOeEFC9dNCyUHhLMBYRzgqVHrdFQjCABt9Np7f33zWb0thDOCRqyb/KoNVXFDA0HQQJuiuLf99V6jVQQzgkWsj/08LF0UcjQcBAoo935Q5va4UI4J2jI3sLrMdpU0CccRKtRF7PZ3+ev5RLnAuEcHmugTv6lGqqK0KZ8p1bYUcXKr+zPSfp7COeItsGqCsowOHVVhKEpcOzU1zcldk2FhHMI5xDOIZxDOEc0Zt9UGUHjrzHhHMI5EntYXUAsgOS7wBbbYoRzCOeI1mw8VibIm6LKEM4RLUNtC6O+0rWsBZjXBlcKDR6rXkg4J2icCDmF8vjQErkgAbGTIGMPJuEcsTQ+5MxP3W8sVRFSnBJrilUtO30gnCOWxvt6SEsZmUwmk0E3vgEF3bB4NixrnAAAAABJRU5ErkJggg==" alt="Apple Upscaler Logo" style="width: 28px; height: 28px; image-rendering: pixelated; object-fit: contain; display: block;" />
         </div>
         <div class="brand-title" id="lblAppName">Apple Upscaler</div>
-        <div class="brand-badge" id="lblAppEdition" style="background: rgba(225, 29, 72, 0.2); border: 1px solid rgba(225, 29, 72, 0.4); color: #fb7185;">Neural Pro</div>
 
         <!-- FOLDER VIDEO NAVIGATION & SWITCHER -->
         <div class="folder-nav-group" id="folderNavGroup" style="display:none;" title="Switch through videos in folder (Shortcuts: [ and ])">
@@ -53,6 +52,15 @@
       </div>
 
       <div class="topbar-actions">
+        <!-- SMART AI AUTO-ENHANCE (CALCULATED SOURCE FIXES) -->
+        <button class="btn-action auto-enhance" onclick="triggerAIAutoEnhance()" title="Smart AI Image Analysis & Calculated Auto-Enhance">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="m15 4 6 6-10 10H5v-6l10-10z"></path>
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L20 7l-3-3 1.5-1.5z"></path>
+          </svg>
+          Auto-Enhance
+        </button>
+
         <!-- SUGGEST ENHANCEMENTS VISUAL AUDITION -->
         <button class="btn-action suggest" onclick="openAuditionModal()" title="AI Remaster Enhancements Audition">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -95,22 +103,38 @@
           Redo
         </button>
 
-        <!-- SAVE / LOAD PRESET -->
-        <button class="btn-action" onclick="saveCustomPreset()" title="Save grading preset to file">
+        <!-- PRESET OPTIONS: COPY, EXTRACT, APPLY -->
+        <button class="btn-action copy-preset" onclick="copyPresetToClipboard()" title="Copy preset settings to clipboard as text">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
-            <polyline points="17 21 17 13 7 13 7 21"></polyline>
-            <polyline points="7 3 7 8 15 8"></polyline>
+            <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+            <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
           </svg>
-          Save
+          Copy Preset
         </button>
-        <button class="btn-action" onclick="loadCustomPreset()" title="Load grading preset from file">
+        <button class="btn-action" onclick="extractPresetToFile()" title="Save preset file to PC (.json)">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
             <polyline points="7 10 12 15 17 10"></polyline>
             <line x1="12" y1="15" x2="12" y2="3"></line>
           </svg>
-          Load
+          Extract Preset
+        </button>
+        <button class="btn-action" onclick="applySmartPreset()" title="Apply preset from clipboard, or pick preset file">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <polyline points="9 15 11 17 15 13"></polyline>
+          </svg>
+          Apply Preset
+        </button>
+
+        <!-- UNIVERSAL MASTER RESET -->
+        <button class="btn-action" onclick="resetAllDefaults()" title="Reset all pipeline parameters back to calibrated defaults">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+            <path d="M3 3v5h5"></path>
+          </svg>
+          Reset All
         </button>
       </div>
     </header>
@@ -234,14 +258,38 @@
     
     <!-- TABS -->
     <nav class="studio-tabs">
-      <button class="studio-tab-btn active" onclick="switchSidebarTab('tabColor', this)">Color</button>
-      <button class="studio-tab-btn" onclick="switchSidebarTab('tabVHS', this)">VHS Studio</button>
-      <button class="studio-tab-btn" onclick="switchSidebarTab('tabRetroCRT', this)">Retro CRT</button>
-      <button class="studio-tab-btn" onclick="switchSidebarTab('tabAIUpscale', this)">AI Upscale</button>
-      <button class="studio-tab-btn" onclick="switchSidebarTab('tabRestoration', this)">Cel Polish</button>
-      <button class="studio-tab-btn" onclick="switchSidebarTab('tabGeometry', this)">Geometry</button>
-      <button class="studio-tab-btn" onclick="switchSidebarTab('tabBatch', this)">Batch</button>
-      <button class="studio-tab-btn" onclick="switchSidebarTab('tabExport', this)">Export</button>
+      <button class="studio-tab-btn active" onclick="switchSidebarTab('tabColor', this)">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a7 7 0 0 0 7 7c0 2-2 3-2 3s-1 1-1 2a2 2 0 0 0 2 2h1a7 7 0 0 1-7 7"></path></svg>
+        <span>Color</span>
+      </button>
+      <button class="studio-tab-btn" onclick="switchSidebarTab('tabVHS', this)">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"></rect><circle cx="8" cy="12" r="2.5"></circle><circle cx="16" cy="12" r="2.5"></circle><line x1="8" y1="12" x2="16" y2="12"></line></svg>
+        <span>VHS Studio</span>
+      </button>
+      <button class="studio-tab-btn" onclick="switchSidebarTab('tabRetroCRT', this)">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
+        <span>Retro CRT</span>
+      </button>
+      <button class="studio-tab-btn" onclick="switchSidebarTab('tabAIUpscale', this)">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"></path></svg>
+        <span>AI Upscale</span>
+      </button>
+      <button class="studio-tab-btn" onclick="switchSidebarTab('tabRestoration', this)">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 4 6 6-10 10H5v-6l10-10z"></path></svg>
+        <span>Cel Polish</span>
+      </button>
+      <button class="studio-tab-btn" onclick="switchSidebarTab('tabGeometry', this)">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"></path></svg>
+        <span>Geometry</span>
+      </button>
+      <button class="studio-tab-btn" onclick="switchSidebarTab('tabBatch', this)">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+        <span>Batch</span>
+      </button>
+      <button class="studio-tab-btn" onclick="switchSidebarTab('tabExport', this)">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+        <span>Export</span>
+      </button>
     </nav>
 
     <!-- TAB 1: COLOR & WHEELS -->
@@ -306,8 +354,14 @@
       <!-- 3-WAY COLOR WHEELS (DAVINCI STYLE) -->
       <div class="studio-card">
         <div class="card-head">
-          <span class="card-title">Lift / Gamma / Gain Color Wheels</span>
-          <button class="btn-reset-link" onclick="resetColorWheels()">Reset Wheels</button>
+          <span class="card-title">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="2" x2="12" y2="22"></line><line x1="2" y1="12" x2="22" y2="12"></line></svg>
+            Lift / Gamma / Gain Color Wheels
+          </span>
+          <button class="btn-reset-link" onclick="resetCategoryDefaults('wheels')">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+            Reset Wheels
+          </button>
         </div>
 
         <div class="color-wheels-container">
@@ -358,73 +412,114 @@
       <!-- PRIMARY COLOR SLIDERS -->
       <div class="studio-card">
         <div class="card-head">
-          <span class="card-title">Primary Color Grading</span>
-          <button class="btn-reset-link" onclick="resetSlidersToDefault()">Reset Defaults</button>
+          <span class="card-title">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a7 7 0 0 0 7 7c0 2-2 3-2 3s-1 1-1 2a2 2 0 0 0 2 2h1a7 7 0 0 1-7 7"></path></svg>
+            Primary Color Grading
+          </span>
+          <button class="btn-reset-link" onclick="resetCategoryDefaults('color')">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+            Reset Color
+          </button>
         </div>
         
         <div class="slider-group">
           
           <div class="slider-row">
             <div class="slider-meta">
-              <span>Exposure Compensation</span>
-              <span class="slider-val" id="valExposure">0.0 EV</span>
+              <span class="slider-label-group">
+                <span>Exposure Compensation</span>
+                <button class="btn-param-reset" onclick="resetSingleParam('exposure')" title="Reset Exposure to 0.0 EV">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+                </button>
+              </span>
+              <span class="slider-val" id="valExposure" ondblclick="resetSingleParam('exposure')" title="Double click to reset">0.0 EV</span>
             </div>
             <input type="range" class="slider-bar" id="slExposure" min="-1.5" max="1.5" step="0.05" value="0.0"
-                   oninput="onParamChangeLive('exposure', this.value, 'valExposure')">
+                   oninput="onParamChangeLive('exposure', this.value, 'valExposure')" ondblclick="resetSingleParam('exposure')">
           </div>
 
           <div class="slider-row">
             <div class="slider-meta">
-              <span>Dynamic Contrast</span>
-              <span class="slider-val" id="valContrast">1.14</span>
+              <span class="slider-label-group">
+                <span>Dynamic Contrast</span>
+                <button class="btn-param-reset" onclick="resetSingleParam('contrast')" title="Reset Contrast to default">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+                </button>
+              </span>
+              <span class="slider-val" id="valContrast" ondblclick="resetSingleParam('contrast')" title="Double click to reset">1.14</span>
             </div>
             <input type="range" class="slider-bar" id="slContrast" min="0.70" max="1.60" step="0.02" value="1.14"
-                   oninput="onParamChangeLive('contrast', this.value, 'valContrast')">
+                   oninput="onParamChangeLive('contrast', this.value, 'valContrast')" ondblclick="resetSingleParam('contrast')">
           </div>
 
           <div class="slider-row">
             <div class="slider-meta">
-              <span>Color Saturation</span>
-              <span class="slider-val" id="valSaturation">1.26</span>
+              <span class="slider-label-group">
+                <span>Color Saturation</span>
+                <button class="btn-param-reset" onclick="resetSingleParam('saturation')" title="Reset Saturation to default">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+                </button>
+              </span>
+              <span class="slider-val" id="valSaturation" ondblclick="resetSingleParam('saturation')" title="Double click to reset">1.26</span>
             </div>
             <input type="range" class="slider-bar" id="slSaturation" min="0.50" max="1.80" step="0.02" value="1.26"
-                   oninput="onParamChangeLive('saturation', this.value, 'valSaturation')">
+                   oninput="onParamChangeLive('saturation', this.value, 'valSaturation')" ondblclick="resetSingleParam('saturation')">
           </div>
 
           <div class="slider-row">
             <div class="slider-meta">
-              <span>Shadow De-Fog (Gamma Curve)</span>
-              <span class="slider-val" id="valGamma">0.88</span>
+              <span class="slider-label-group">
+                <span>Shadow De-Fog (Gamma Curve)</span>
+                <button class="btn-param-reset" onclick="resetSingleParam('gamma')" title="Reset Gamma Curve to default">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+                </button>
+              </span>
+              <span class="slider-val" id="valGamma" ondblclick="resetSingleParam('gamma')" title="Double click to reset">0.88</span>
             </div>
             <input type="range" class="slider-bar" id="slGamma" min="0.60" max="1.20" step="0.02" value="0.88"
-                   oninput="onParamChangeLive('gamma', this.value, 'valGamma')">
+                   oninput="onParamChangeLive('gamma', this.value, 'valGamma')" ondblclick="resetSingleParam('gamma')">
           </div>
 
           <div class="slider-row">
             <div class="slider-meta">
-              <span>Black Pedestal Floor</span>
-              <span class="slider-val" id="valBrightness">-0.018</span>
+              <span class="slider-label-group">
+                <span>Black Pedestal Floor</span>
+                <button class="btn-param-reset" onclick="resetSingleParam('brightness')" title="Reset Black Pedestal to default">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+                </button>
+              </span>
+              <span class="slider-val" id="valBrightness" ondblclick="resetSingleParam('brightness')" title="Double click to reset">-0.018</span>
             </div>
             <input type="range" class="slider-bar" id="slBrightness" min="-0.08" max="0.06" step="0.002" value="-0.018"
-                   oninput="onParamChangeLive('brightness', this.value, 'valBrightness')">
+                   oninput="onParamChangeLive('brightness', this.value, 'valBrightness')" ondblclick="resetSingleParam('brightness')">
           </div>
 
           <div class="slider-row">
             <div class="slider-meta">
-              <span>Color Temperature</span>
-              <span class="slider-val" id="valTemp">0</span>
+              <span class="slider-label-group">
+                <span>Color Temperature</span>
+                <button class="btn-param-reset" onclick="resetSingleParam('temp')" title="Reset Temperature to 0">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+                </button>
+              </span>
+              <span class="slider-val" id="valTemp" ondblclick="resetSingleParam('temp')" title="Double click to reset">0</span>
             </div>
             <input type="range" class="slider-bar" id="slTemp" min="-30" max="30" step="1" value="0"
-                   oninput="onParamChangeLive('temp', this.value, 'valTemp')">
+                   oninput="onParamChangeLive('temp', this.value, 'valTemp')" ondblclick="resetSingleParam('temp')">
           </div>
 
           <div class="slider-row">
             <div class="slider-meta">
-              <span>AMD CAS Line Sharpening</span>
-              <span class="slider-val" id="valSharpness">0.80</span>
+              <span class="slider-label-group">
+                <span>AMD CAS Line Sharpening</span>
+                <button class="btn-param-reset" onclick="resetSingleParam('sharpness')" title="Reset Sharpening to default">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+                </button>
+              </span>
+              <span class="slider-val" id="valSharpness" ondblclick="resetSingleParam('sharpness')" title="Double click to reset">0.80</span>
             </div>
             <input type="range" class="slider-bar" id="slSharpness" min="0" max="1" step="0.02" value="0.80"
-                   oninput="onParamChangeLive('sharpness', this.value, 'valSharpness')">
+                   oninput="onParamChangeLive('sharpness', this.value, 'valSharpness')" ondblclick="resetSingleParam('sharpness')">
           </div>
 
         </div>
@@ -446,11 +541,16 @@
 
         <div class="slider-row" id="rowLutIntensity">
           <div class="slider-meta">
-            <span>LUT Intensity Blend</span>
-            <span class="slider-val" id="valLutIntensity">100%</span>
+            <span class="slider-label-group">
+              <span>LUT Intensity Blend</span>
+              <button class="btn-param-reset" onclick="resetSingleParam('lut_intensity')" title="Reset LUT Intensity">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+              </button>
+            </span>
+            <span class="slider-val" id="valLutIntensity" ondblclick="resetSingleParam('lut_intensity')" title="Double click to reset">100%</span>
           </div>
           <input type="range" class="slider-bar" id="slLutIntensity" min="0.1" max="1.0" step="0.05" value="1.0"
-                 oninput="onParamChangeLive('lut_intensity', this.value, 'valLutIntensity')">
+                 oninput="onParamChangeLive('lut_intensity', this.value, 'valLutIntensity')" ondblclick="resetSingleParam('lut_intensity')">
         </div>
       </div>
 
@@ -463,8 +563,14 @@
       <!-- VHS TAPE EMULATION -->
       <div class="studio-card">
         <div class="card-head">
-          <span class="card-title">VHS Tape Emulation</span>
-          <span style="font-size: 10px; color: var(--accent-rose); font-weight: 700;">NTSC PHYSICAL DSP</span>
+          <span class="card-title">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"></rect><circle cx="8" cy="12" r="2.5"></circle><circle cx="16" cy="12" r="2.5"></circle><line x1="8" y1="12" x2="16" y2="12"></line></svg>
+            VHS Tape Emulation
+          </span>
+          <button class="btn-reset-link" onclick="resetCategoryDefaults('vhs')">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+            Reset VHS
+          </button>
         </div>
         <div style="font-size: 11px; color: var(--text-sub); line-height: 1.4;">
           Authentic physical analog tape DSP simulation via NTSC-RS: subcarrier demodulation, color-under chroma loss, and helical head tracking.
@@ -492,11 +598,16 @@
 
         <div class="slider-row">
           <div class="slider-meta">
-            <span>Chroma Loss</span>
-            <span class="slider-val" id="valVhsChromaLoss">0.05%</span>
+            <span class="slider-label-group">
+              <span>Chroma Loss</span>
+              <button class="btn-param-reset" onclick="resetSingleParam('vhs_chroma_loss')" title="Reset Chroma Loss">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+              </button>
+            </span>
+            <span class="slider-val" id="valVhsChromaLoss" ondblclick="resetSingleParam('vhs_chroma_loss')" title="Double click to reset">0.05%</span>
           </div>
           <input type="range" class="slider-bar" id="slVhsChromaLoss" min="0.00" max="0.50" step="0.01" value="0.05"
-                 oninput="onVhsChromaLossChange(this.value)">
+                 oninput="onVhsChromaLossChange(this.value)" ondblclick="resetSingleParam('vhs_chroma_loss')">
         </div>
 
         <div class="toggle-row">
@@ -530,20 +641,30 @@
 
         <div class="slider-row">
           <div class="slider-meta">
-            <span>Sharpen Intensity</span>
-            <span class="slider-val" id="valVhsSharpen">0.50</span>
+            <span class="slider-label-group">
+              <span>Sharpen Intensity</span>
+              <button class="btn-param-reset" onclick="resetSingleParam('vhs_sharpen')" title="Reset Sharpen Intensity">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+              </button>
+            </span>
+            <span class="slider-val" id="valVhsSharpen" ondblclick="resetSingleParam('vhs_sharpen')" title="Double click to reset">0.50</span>
           </div>
           <input type="range" class="slider-bar" id="slVhsSharpen" min="0.00" max="2.00" step="0.05" value="0.50"
-                 oninput="onVhsSharpenChange(this.value)">
+                 oninput="onVhsSharpenChange(this.value)" ondblclick="resetSingleParam('vhs_sharpen')">
         </div>
 
         <div class="slider-row">
           <div class="slider-meta">
-            <span>Peaking Frequency</span>
-            <span class="slider-val" id="valVhsSharpenFreq">1.00</span>
+            <span class="slider-label-group">
+              <span>Peaking Frequency</span>
+              <button class="btn-param-reset" onclick="resetSingleParam('vhs_sharpen_freq')" title="Reset Peaking Frequency">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+              </button>
+            </span>
+            <span class="slider-val" id="valVhsSharpenFreq" ondblclick="resetSingleParam('vhs_sharpen_freq')" title="Double click to reset">1.00</span>
           </div>
           <input type="range" class="slider-bar" id="slVhsSharpenFreq" min="0.20" max="3.00" step="0.10" value="1.00"
-                 oninput="onVhsSharpenFreqChange(this.value)">
+                 oninput="onVhsSharpenFreqChange(this.value)" ondblclick="resetSingleParam('vhs_sharpen_freq')">
         </div>
       </div>
 
@@ -570,29 +691,44 @@
 
         <div class="slider-row">
           <div class="slider-meta">
-            <span>Height (Scanlines)</span>
-            <span class="slider-val" id="valHeadHeight">16 lines</span>
+            <span class="slider-label-group">
+              <span>Height (Scanlines)</span>
+              <button class="btn-param-reset" onclick="resetSingleParam('head_switching_height')" title="Reset Head Height">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+              </button>
+            </span>
+            <span class="slider-val" id="valHeadHeight" ondblclick="resetSingleParam('head_switching_height')" title="Double click to reset">16 lines</span>
           </div>
           <input type="range" class="slider-bar" id="slHeadHeight" min="0" max="60" step="1" value="16"
-                 oninput="onHeadHeightChange(this.value)">
+                 oninput="onHeadHeightChange(this.value)" ondblclick="resetSingleParam('head_switching_height')">
         </div>
 
         <div class="slider-row">
           <div class="slider-meta">
-            <span>Horizontal Shift</span>
-            <span class="slider-val" id="valHeadShift">80 px</span>
+            <span class="slider-label-group">
+              <span>Horizontal Shift</span>
+              <button class="btn-param-reset" onclick="resetSingleParam('head_switching_shift')" title="Reset Head Shift">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+              </button>
+            </span>
+            <span class="slider-val" id="valHeadShift" ondblclick="resetSingleParam('head_switching_shift')" title="Double click to reset">80 px</span>
           </div>
           <input type="range" class="slider-bar" id="slHeadShift" min="0" max="200" step="2" value="80"
-                 oninput="onHeadShiftChange(this.value)">
+                 oninput="onHeadShiftChange(this.value)" ondblclick="resetSingleParam('head_switching_shift')">
         </div>
 
         <div class="slider-row">
           <div class="slider-meta">
-            <span>Mid-Line Jitter</span>
-            <span class="slider-val" id="valHeadJitter">0.05</span>
+            <span class="slider-label-group">
+              <span>Mid-Line Jitter</span>
+              <button class="btn-param-reset" onclick="resetSingleParam('head_switching_jitter')" title="Reset Head Jitter">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+              </button>
+            </span>
+            <span class="slider-val" id="valHeadJitter" ondblclick="resetSingleParam('head_switching_jitter')" title="Double click to reset">0.05</span>
           </div>
           <input type="range" class="slider-bar" id="slHeadJitter" min="0.00" max="0.25" step="0.01" value="0.05"
-                 oninput="onHeadJitterChange(this.value)">
+                 oninput="onHeadJitterChange(this.value)" ondblclick="resetSingleParam('head_switching_jitter')">
         </div>
       </div>
 
@@ -619,20 +755,30 @@
 
         <div class="slider-row">
           <div class="slider-meta">
-            <span>Wave Intensity</span>
-            <span class="slider-val" id="valVhsEdgeWave">0.50</span>
+            <span class="slider-label-group">
+              <span>Wave Intensity</span>
+              <button class="btn-param-reset" onclick="resetSingleParam('vhs_edge_wave')" title="Reset Wave Intensity">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+              </button>
+            </span>
+            <span class="slider-val" id="valVhsEdgeWave" ondblclick="resetSingleParam('vhs_edge_wave')" title="Double click to reset">0.50</span>
           </div>
           <input type="range" class="slider-bar" id="slVhsEdgeWave" min="0.0" max="2.0" step="0.1" value="0.5"
-                 oninput="onVhsEdgeWaveChange(this.value)">
+                 oninput="onVhsEdgeWaveChange(this.value)" ondblclick="resetSingleParam('vhs_edge_wave')">
         </div>
 
         <div class="slider-row">
           <div class="slider-meta">
-            <span>Flutter Speed</span>
-            <span class="slider-val" id="valVhsEdgeWaveSpeed">4.00</span>
+            <span class="slider-label-group">
+              <span>Flutter Speed</span>
+              <button class="btn-param-reset" onclick="resetSingleParam('vhs_edge_wave_speed')" title="Reset Flutter Speed">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+              </button>
+            </span>
+            <span class="slider-val" id="valVhsEdgeWaveSpeed" ondblclick="resetSingleParam('vhs_edge_wave_speed')" title="Double click to reset">4.00</span>
           </div>
           <input type="range" class="slider-bar" id="slVhsEdgeWaveSpeed" min="0.5" max="10.0" step="0.5" value="4.0"
-                 oninput="onVhsEdgeWaveSpeedChange(this.value)">
+                 oninput="onVhsEdgeWaveSpeedChange(this.value)" ondblclick="resetSingleParam('vhs_edge_wave_speed')">
         </div>
       </div>
 
@@ -655,20 +801,30 @@
 
         <div class="slider-row">
           <div class="slider-meta">
-            <span>Ringing Frequency</span>
-            <span class="slider-val" id="valVhsRingingFreq">0.45</span>
+            <span class="slider-label-group">
+              <span>Ringing Frequency</span>
+              <button class="btn-param-reset" onclick="resetSingleParam('vhs_ringing_freq')" title="Reset Ringing Frequency">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+              </button>
+            </span>
+            <span class="slider-val" id="valVhsRingingFreq" ondblclick="resetSingleParam('vhs_ringing_freq')" title="Double click to reset">0.45</span>
           </div>
           <input type="range" class="slider-bar" id="slVhsRingingFreq" min="0.10" max="0.80" step="0.05" value="0.45"
-                 oninput="onVhsRingingFreqChange(this.value)">
+                 oninput="onVhsRingingFreqChange(this.value)" ondblclick="resetSingleParam('vhs_ringing_freq')">
         </div>
 
         <div class="slider-row">
           <div class="slider-meta">
-            <span>Ringing Power</span>
-            <span class="slider-val" id="valVhsRingingPower">4</span>
+            <span class="slider-label-group">
+              <span>Ringing Power</span>
+              <button class="btn-param-reset" onclick="resetSingleParam('vhs_ringing_power')" title="Reset Ringing Power">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+              </button>
+            </span>
+            <span class="slider-val" id="valVhsRingingPower" ondblclick="resetSingleParam('vhs_ringing_power')" title="Double click to reset">4</span>
           </div>
           <input type="range" class="slider-bar" id="slVhsRingingPower" min="1" max="8" step="1" value="4"
-                 oninput="onVhsRingingPowerChange(this.value)">
+                 oninput="onVhsRingingPowerChange(this.value)" ondblclick="resetSingleParam('vhs_ringing_power')">
         </div>
       </div>
 
@@ -692,11 +848,16 @@
 
         <div class="slider-row">
           <div class="slider-meta">
-            <span>Chroma Noise Intensity</span>
-            <span class="slider-val" id="valVhsChromaNoise">25%</span>
+            <span class="slider-label-group">
+              <span>Chroma Noise Intensity</span>
+              <button class="btn-param-reset" onclick="resetSingleParam('vhs_chroma_noise_intensity')" title="Reset Chroma Noise">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+              </button>
+            </span>
+            <span class="slider-val" id="valVhsChromaNoise" ondblclick="resetSingleParam('vhs_chroma_noise_intensity')" title="Double click to reset">25%</span>
           </div>
           <input type="range" class="slider-bar" id="slVhsChromaNoise" min="0" max="100" step="2" value="25"
-                 oninput="onVhsChromaNoiseChange(this.value)">
+                 oninput="onVhsChromaNoiseChange(this.value)" ondblclick="resetSingleParam('vhs_chroma_noise_intensity')">
         </div>
 
         <div class="toggle-row">
@@ -712,11 +873,16 @@
 
         <div class="slider-row">
           <div class="slider-meta">
-            <span>Composite Noise Intensity</span>
-            <span class="slider-val" id="valVhsCompNoise">15%</span>
+            <span class="slider-label-group">
+              <span>Composite Noise Intensity</span>
+              <button class="btn-param-reset" onclick="resetSingleParam('vhs_composite_noise_intensity')" title="Reset Composite Noise">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+              </button>
+            </span>
+            <span class="slider-val" id="valVhsCompNoise" ondblclick="resetSingleParam('vhs_composite_noise_intensity')" title="Double click to reset">15%</span>
           </div>
           <input type="range" class="slider-bar" id="slVhsCompNoise" min="0" max="50" step="1" value="15"
-                 oninput="onVhsCompNoiseChange(this.value)">
+                 oninput="onVhsCompNoiseChange(this.value)" ondblclick="resetSingleParam('vhs_composite_noise_intensity')">
         </div>
       </div>
 
@@ -727,8 +893,14 @@
       
       <div class="studio-card">
         <div class="card-head">
-          <span class="card-title">CRT Television Simulation</span>
-          <span style="font-size: 10px; color: var(--accent-amber); font-weight: 700;">ANALOG TUBE HARDWARE</span>
+          <span class="card-title">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
+            CRT Television Simulation
+          </span>
+          <button class="btn-reset-link" onclick="resetCategoryDefaults('crt')">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+            Reset CRT
+          </button>
         </div>
         <div style="font-size: 11px; color: var(--text-sub); line-height: 1.4;">
           Authentic vintage CRT television simulation with aperture grille scanlines and curved glass bloom.
@@ -747,11 +919,16 @@
 
         <div class="slider-row">
           <div class="slider-meta">
-            <span>Scanline Intensity</span>
-            <span class="slider-val" id="valCrtIntensity">70%</span>
+            <span class="slider-label-group">
+              <span>Scanline Intensity</span>
+              <button class="btn-param-reset" onclick="resetSingleParam('crt_intensity')" title="Reset Scanline Intensity">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+              </button>
+            </span>
+            <span class="slider-val" id="valCrtIntensity" ondblclick="resetSingleParam('crt_intensity')" title="Double click to reset">70%</span>
           </div>
           <input type="range" class="slider-bar" id="slCrtIntensity" min="0.1" max="1.0" step="0.05" value="0.70"
-                 oninput="onCrtIntensityChange(this.value)" onchange="refreshFrame()">
+                 oninput="onCrtIntensityChange(this.value)" onchange="refreshFrame()" ondblclick="resetSingleParam('crt_intensity')">
         </div>
 
         <div class="toggle-row">
@@ -835,17 +1012,28 @@
       
       <div class="studio-card">
         <div class="card-head">
-          <span class="card-title">Ink Density & Cel Deflicker</span>
-          <span style="font-size: 10px; color: var(--accent-cyan); font-weight: 700;">PRO CEL TOOLS</span>
+          <span class="card-title">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 4 6 6-10 10H5v-6l10-10z"></path></svg>
+            Ink Density & Cel Deflicker
+          </span>
+          <button class="btn-reset-link" onclick="resetCategoryDefaults('restoration')">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+            Reset Polish
+          </button>
         </div>
 
         <div class="slider-row">
           <div class="slider-meta">
-            <span>Line Art Darkener (Ink Infill)</span>
-            <span class="slider-val" id="valLineDarken">0.00</span>
+            <span class="slider-label-group">
+              <span>Line Art Darkener (Ink Infill)</span>
+              <button class="btn-param-reset" onclick="resetSingleParam('line_darken')" title="Reset Line Darkener">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+              </button>
+            </span>
+            <span class="slider-val" id="valLineDarken" ondblclick="resetSingleParam('line_darken')" title="Double click to reset">0.00</span>
           </div>
           <input type="range" class="slider-bar" id="slLineDarken" min="0" max="1" step="0.05" value="0.00"
-                 oninput="onParamChangeLive('line_darken', this.value, 'valLineDarken')">
+                 oninput="onParamChangeLive('line_darken', this.value, 'valLineDarken')" ondblclick="resetSingleParam('line_darken')">
         </div>
 
         <div class="toggle-row">
@@ -865,20 +1053,30 @@
         
         <div class="slider-row">
           <div class="slider-meta">
-            <span>Cel Animation Denoise (HQDN3D)</span>
-            <span class="slider-val" id="valDenoise">3.0</span>
+            <span class="slider-label-group">
+              <span>Cel Animation Denoise (HQDN3D)</span>
+              <button class="btn-param-reset" onclick="resetSingleParam('denoise')" title="Reset Denoise">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+              </button>
+            </span>
+            <span class="slider-val" id="valDenoise" ondblclick="resetSingleParam('denoise')" title="Double click to reset">3.0</span>
           </div>
           <input type="range" class="slider-bar" id="slDenoise" min="0" max="8" step="0.5" value="3.0"
-                 oninput="onParamChangeLive('denoise', this.value, 'valDenoise')">
+                 oninput="onParamChangeLive('denoise', this.value, 'valDenoise')" ondblclick="resetSingleParam('denoise')">
         </div>
 
         <div class="slider-row">
           <div class="slider-meta">
-            <span>Organic 35mm Film Grain</span>
-            <span class="slider-val" id="valGrain">0.00</span>
+            <span class="slider-label-group">
+              <span>Organic 35mm Film Grain</span>
+              <button class="btn-param-reset" onclick="resetSingleParam('grain')" title="Reset Grain">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+              </button>
+            </span>
+            <span class="slider-val" id="valGrain" ondblclick="resetSingleParam('grain')" title="Double click to reset">0.00</span>
           </div>
           <input type="range" class="slider-bar" id="slGrain" min="0" max="0.25" step="0.01" value="0.00"
-                 oninput="onParamChangeLive('grain', this.value, 'valGrain')">
+                 oninput="onParamChangeLive('grain', this.value, 'valGrain')" ondblclick="resetSingleParam('grain')">
         </div>
 
         <div class="toggle-row">
@@ -925,7 +1123,16 @@
     <div class="studio-scroll" id="tabGeometry" style="display:none;">
       
       <div class="studio-card">
-        <div class="card-title">Aspect Ratio & Canvas Framing</div>
+        <div class="card-head">
+          <span class="card-title">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"></path></svg>
+            Aspect Ratio & Canvas Framing
+          </span>
+          <button class="btn-reset-link" onclick="resetCategoryDefaults('geometry')">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+            Reset Framing
+          </button>
+        </div>
         <div class="segmented-bar">
           <button class="seg-btn active" onclick="setFraming('4:3 Pillarbox', this)">4:3 Pillarbox</button>
           <button class="seg-btn" onclick="setFraming('16:9 Ambient', this)">16:9 Ambient Wings</button>
@@ -1012,11 +1219,16 @@
 
         <div class="slider-row">
           <div class="slider-meta">
-            <span>Constant Quality (CQ)</span>
-            <span class="slider-val" id="valCQ">20 (Master)</span>
+            <span class="slider-label-group">
+              <span>Constant Quality (CQ)</span>
+              <button class="btn-param-reset" onclick="resetSingleParam('cq')" title="Reset CQ to 20">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+              </button>
+            </span>
+            <span class="slider-val" id="valCQ" ondblclick="resetSingleParam('cq')" title="Double click to reset">20 (Master)</span>
           </div>
           <input type="range" class="slider-bar" id="slCQ" min="15" max="28" step="1" value="20"
-                 oninput="onParamChangeLive('cq', this.value, 'valCQ')">
+                 oninput="onParamChangeLive('cq', this.value, 'valCQ')" ondblclick="resetSingleParam('cq')">
         </div>
 
         <div class="toggle-row" style="margin-top: 6px; padding-top: 8px; border-top: 1px solid var(--border-subtle);">
@@ -1083,8 +1295,37 @@
   </div>
 </div>
 
+<!-- AI DIAGNOSTIC MODAL (SMART PROBLEM RECOGNITION & AUTO-ENHANCE) -->
+<div class="modal-overlay" id="aiDiagModal" style="display:none;">
+  <div class="ai-diag-window">
+    <div class="modal-head">
+      <div>
+        <div class="modal-title">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.5"><path d="m15 4 6 6-10 10H5v-6l10-10z"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L20 7l-3-3 1.5-1.5z"></path></svg>
+          Smart AI Frame Analysis & Auto-Enhance
+        </div>
+        <div style="font-size: 11px; color: var(--text-sub);">Calculated corrections based on computer vision frame inspection</div>
+      </div>
+      <button class="btn-close-modal" onclick="closeAIDiagModal()">&times;</button>
+    </div>
+    
+    <div class="ai-diag-body" id="aiDiagBody">
+      <!-- Injected dynamically by triggerAIAutoEnhance() -->
+    </div>
+
+    <div class="ai-diag-foot">
+      <button class="btn-subtle" onclick="closeAIDiagModal()">Discard</button>
+      <button class="btn-primary-export" style="padding: 6px 16px; font-size: 12px; background: linear-gradient(135deg, #10b981, #059669);" onclick="applyPendingAIEnhancements()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+        Apply Calculated Enhancements
+      </button>
+    </div>
+  </div>
+</div>
+
 <!-- TOAST -->
 <div class="toast-msg" id="toastMsg">
+  <span class="toast-icon" id="toastIcon"></span>
   <span id="toastText">Ready</span>
 </div>
 
