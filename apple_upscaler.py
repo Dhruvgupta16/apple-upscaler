@@ -673,14 +673,16 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
 
             if orig_h <= 576:
                 problems.append(f"Standard Definition ({orig_w}x{orig_h}) with telecine softness & analog compression ringing")
-                enhancements.append("Real-ESRGAN Anime 6B deep cel reconstruction to 1080p + 0.30 cel ink outline infill")
+                enhancements.append("Real-ESRGAN 4x deep cel reconstruction + 0.35 cel ink outline infill + AMD CAS 0.85 definition")
                 calc_settings["ai_model"] = "realesrgan-x4plus-anime"
                 calc_settings["resolution"] = "1080p"
-                calc_settings["sharpness"] = 0.45
-                calc_settings["line_darken"] = 0.30
+                calc_settings["sharpness"] = 0.85
+                calc_settings["line_darken"] = 0.35
                 calc_settings["denoise"] = 2.5
                 calc_settings["deband"] = True
                 calc_settings["edge_clean"] = True
+                calc_settings["brightness"] = 0.040
+                calc_settings["gamma"] = 1.180
             elif orig_h <= 720:
                 problems.append(f"720p HD with mild line softness (Laplacian score: {lap_var:.0f})")
                 enhancements.append("Target 1080p remaster with AMD CAS 0.60 edge reconstruction & light cel deband")
@@ -690,10 +692,14 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
                 calc_settings["line_darken"] = 0.15
                 calc_settings["deband"] = True
             elif orig_h >= 1440:
-                problems.append(f"Ultra-High Resolution source ({orig_w}x{orig_h}): neural 4x upscale bypassed to prevent 8K memory bloat")
-                enhancements.append("Ultra-fast GPU Lanczos-3 Sinc + calibrated AMD CAS 0.50 line definition (instant zero-latency playback)")
-                calc_settings["ai_model"] = "lanczos"
-                calc_settings["sharpness"] = 0.50
+                problems.append(f"High Resolution master ({orig_w}x{orig_h}) - applying high-clarity edge sharpening & neural enhancement")
+                enhancements.append("Real-ESRGAN edge reconstruction + AMD CAS 0.85 line definition + deband smoothing")
+                calc_settings["ai_model"] = "realesr-animevideov3"
+                calc_settings["sharpness"] = 0.85
+                calc_settings["line_darken"] = 0.25
+                calc_settings["deband"] = True
+                calc_settings["brightness"] = 0.035
+                calc_settings["gamma"] = 1.150
             else:
                 enhancements.append("AMD CAS 0.55 calibrated edge definition")
                 calc_settings["sharpness"] = 0.55
@@ -714,16 +720,16 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
             # 3. Dynamic Range & Multi-Scene Protection (SOLVES NIGHT VS MORNING DILEMMA)
             if is_mixed_dynamic_range:
                 problems.append(f"Mixed Dynamic Range: Timeline has both dark night scenes ({min_scene_luma:.1f} IRE) and bright morning/daylight scenes ({max_scene_luma:.1f} IRE)")
-                enhancements.append("Smart Scene Dynamic Range Protection active: raised shadow floor (+0.008) with S-curve highlight rolloff — prevents night scene crush while stopping morning daylight burnout")
-                calc_settings["brightness"] = 0.008
-                calc_settings["gamma"] = 1.050
-                calc_settings["contrast"] = 1.050
+                enhancements.append("Smart Scene Dynamic Range Protection active: raised shadow floor (+0.045) & open gamma (1.22) with S-curve rolloff — illuminates night scenes while stopping morning daylight burnout")
+                calc_settings["brightness"] = 0.045
+                calc_settings["gamma"] = 1.220
+                calc_settings["contrast"] = 1.040
                 calc_settings["exposure"] = 0.0
             elif max_scene_luma < 55.0 or (p50 < 45 and mean_luma < 55):
                 problems.append(f"Uniform Low-Key / Night Scene Theme (Mean Luma: {mean_luma:.1f} IRE)")
-                enhancements.append("Shadow protection enabled: lifted pedestal (+0.018) & open gamma (1.10) to preserve dark backgrounds and clothing textures")
-                calc_settings["brightness"] = 0.018
-                calc_settings["gamma"] = 1.100
+                enhancements.append("Illuminated shadow protection: lifted pedestal (+0.065) & open gamma (1.25) to clearly reveal dark backgrounds, outfits, and silhouettes")
+                calc_settings["brightness"] = 0.065
+                calc_settings["gamma"] = 1.250
                 calc_settings["contrast"] = 1.030
                 calc_settings["exposure"] = 0.0
             elif min_scene_luma > 105.0 or (p1 > 22 and p50 > 65):
@@ -902,10 +908,11 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
             if sample_src:
                 with Image.open(sample_src) as s_im:
                     stat = ImageStat.Stat(s_im.resize((64, 36)).convert("L"))
-                    if stat.mean[0] < 60.0:
-                        brightness = max(brightness, 0.010)
-                        gamma = max(gamma, 1.060)
-                        contrast = min(contrast, 1.080)
+                    # If mean luminance is low (night / low-key scene), lift pedestal & open gamma
+                    if stat.mean[0] < 65.0:
+                        brightness = max(brightness, 0.045)
+                        gamma = max(gamma, 1.220)
+                        contrast = min(contrast, 1.050)
         except Exception:
             pass
 
@@ -990,7 +997,10 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
         # and compresses morning daylight highlights (soft shoulder knee) to prevent blowout!
         smart_s_curve = settings.get("smart_dynamic_range", True)
         if smart_s_curve:
-            chain.append("curves=all='0/0.025 0.15/0.17 0.50/0.50 0.85/0.83 1/0.975'")
+            # Illuminated Dynamic S-Curve: Raised toe (0.065 = 16.5 IRE) ensures night shadows never crush to pitch black,
+            # near-black lift (0.15->0.22) illuminates character robes and dark scenery,
+            # shoulder rolloff (0.85->0.82) compresses morning daylight peaks to eliminate clipping!
+            chain.append("curves=all='0/0.065 0.15/0.22 0.35/0.42 0.65/0.68 0.85/0.82 1/0.96'")
 
         eff_bright = brightness + (exposure * 0.05)
         eff_gamma = max(0.4, gamma + (exposure * 0.08))
@@ -1014,6 +1024,7 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
 
         if sharp > 0.05:
             chain.append(f"cas=strength={sharp:.2f}")
+            chain.append(f"unsharp=lx=5:ly=5:la={min(1.4, sharp * 0.85):.2f}:cx=5:cy=5:ca=0.0")
 
         if grain > 0.01 and not for_preview:
             chain.append(f"noise=alls={int(grain * 25)}:allf=t+u")
@@ -1041,7 +1052,7 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
             lut_file = get_lut_path("Cinema_Vibrant_35mm.cube")
 
         is_complex = False
-        scale_flag = "spline" if "spline" in ai_model else ("lanczos" if not for_preview else "bilinear")
+        scale_flag = "spline" if "spline" in ai_model else "lanczos+accurate_rnd"
 
         if lut_file:
             safe_lut = lut_file.replace("\\", "/").replace(":", "\\:")
@@ -1287,21 +1298,29 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
             self.cached_ts_str = ts_str
             self.cached_ai_model = ""
 
-        # 2. NEURAL UPSCALING CACHE (ONLY RUNS FOR LOW/MID-RES SOURCES, NEVER 2K/4K)
-        # Bypassing 4x neural upscale on 2K/4K sources eliminates 30s freezes and loads in <50ms!
-        run_neural = ("realesr" in ai_model and not is_high_res and self.realesrgan_exe and os.path.exists(self.realesrgan_exe))
+        # 2. NEURAL UPSCALING CACHE (FULL AI ENHANCEMENT FOR PREVIEW)
+        run_neural = ("realesr" in ai_model and self.realesrgan_exe and os.path.exists(self.realesrgan_exe))
         if run_neural:
             need_ai_run = (self.cached_ai_model != ai_model or not os.path.exists(self.cached_ai_scaled_file))
             if need_ai_run and os.path.exists(self.cached_source_file):
-                # For 480p/576p anime cels, use deep 4x cel model (realesrgan-x4plus-anime) for clean vector outlines
+                # For 480p/576p anime cels or high quality, use deep 4x model for sharp vector lines
                 use_deep_cel = is_sd or ("x4plus" in ai_model)
                 m_arg = "realesrgan-x4plus-anime" if use_deep_cel else "realesr-animevideov3"
-                s_arg = "4" if use_deep_cel else "2"
+                s_arg = "4" if (use_deep_cel and not is_high_res) else "2"
                 m_dir = os.path.join(os.path.dirname(self.realesrgan_exe), "models")
                 
+                # If high-res (2K/4K), downscale source frame to 960x540 before neural upscale to ensure 0.5s execution without freezing
+                ai_inp_file = self.cached_source_file
+                if is_high_res:
+                    temp_ai_inp = os.path.join(self.cache_dir, "temp_ai_inp.jpg")
+                    cmd_down = ["ffmpeg", "-y", "-i", self.cached_source_file, "-vf", "scale=960:540", "-q:v", "3", temp_ai_inp]
+                    subprocess.run(cmd_down, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **WIN_FLAGS)
+                    if os.path.exists(temp_ai_inp):
+                        ai_inp_file = temp_ai_inp
+
                 cmd_ai = [
                     self.realesrgan_exe,
-                    "-i", self.cached_source_file,
+                    "-i", ai_inp_file,
                     "-o", self.cached_ai_scaled_file,
                     "-m", m_dir,
                     "-n", m_arg,

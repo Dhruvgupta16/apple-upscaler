@@ -26,8 +26,8 @@
   --text-dim: #94a3b8;
   --text-muted: #64748b;
   
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Segoe UI', Roboto, sans-serif;
-  --font-mono: 'JetBrains Mono', 'SF Mono', ui-monospace, Menlo, Monaco, Consolas, monospace;
+  --font-sans: 'Inter', 'Segoe UI Variable Text', 'Segoe UI', -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Cascadia Code', 'Consolas', 'Courier New', monospace;
   
   --radius-sm: 6px;
   --radius-md: 10px;
@@ -837,15 +837,15 @@ img:not([src]), img[src=""], img[src="#"] {
 }
 
 .studio-card {
-  background: linear-gradient(180deg, rgba(20, 25, 38, 0.78) 0%, rgba(13, 16, 25, 0.90) 100%);
-  backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: var(--radius-lg);
-  padding: 14px 16px;
+  background: linear-gradient(180deg, #151824 0%, #0d0f17 100%);
+  backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 15px 16px;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  box-shadow: 0 8px 32px -4px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.08);
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 .studio-card:hover {
@@ -1127,16 +1127,19 @@ img:not([src]), img[src=""], img[src="#"] {
 .slider-row {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 10px;
-  padding: 9px 12px;
+  gap: 7px;
+  background: #141722;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: 9px;
+  padding: 10px 13px;
+  margin-bottom: 4px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.04);
   transition: all 0.2s ease;
 }
 .slider-row:hover {
-  background: rgba(255, 255, 255, 0.04);
-  border-color: rgba(255, 255, 255, 0.1);
+  background: #1a1e2d;
+  border-color: rgba(255, 255, 255, 0.18);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
 }
 .slider-label-group svg.slider-icon {
   color: var(--accent-rose);
@@ -1613,4 +1616,46 @@ img:not([src]), img[src=""], img[src="#"] {
   justify-content: flex-end;
   gap: 10px;
   background: var(--bg-surface);
+}
+
+/* TOPBAR CLUSTERS & DIVIDERS */
+.topbar-cluster {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.topbar-divider {
+  width: 1px;
+  height: 22px;
+  background: rgba(255, 255, 255, 0.14);
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+
+/* PRESET ACTION GRID */
+.preset-action-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.preset-action-grid .btn-subtle {
+  font-size: 11px;
+  padding: 6px 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  background: #141722;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: 7px;
+  color: var(--text-sub);
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+.preset-action-grid .btn-subtle:hover {
+  background: #1c2130;
+  border-color: rgba(255, 255, 255, 0.22);
+  color: #ffffff;
 }

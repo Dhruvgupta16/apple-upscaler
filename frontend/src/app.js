@@ -3,11 +3,11 @@
 // =========================================================================
 const DEFAULT_SETTINGS = {
   smart_dynamic_range: true,
-  contrast: 1.060,
-  gamma: 1.040,
-  saturation: 1.150,
-  sharpness: 0.600,
-  brightness: 0.005,
+  contrast: 1.050,
+  gamma: 1.120,
+  saturation: 1.160,
+  sharpness: 0.750,
+  brightness: 0.025,
   exposure: 0.0,
   temp: 0.0,
   tint: 0.0,
