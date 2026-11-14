@@ -1512,6 +1512,24 @@ img:not([src]), img[src=""], img[src="#"] {
 }
 .queue-status-badge.processing { background: #3b111c; color: #fecdd3; }
 .queue-status-badge.done { background: #064e3b; color: #6ee7b7; }
+.btn-queue-del {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 3px 5px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.5;
+  transition: all 0.15s ease;
+}
+.btn-queue-del:hover {
+  color: #f43f5e;
+  background: rgba(244, 63, 94, 0.15);
+  opacity: 1;
+}
 
 /* SIDEBAR DOCK */
 .sidebar-dock {

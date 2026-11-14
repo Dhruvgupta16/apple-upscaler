@@ -216,6 +216,8 @@ def probe_media(file_path):
                         info["fps"] = round(num / max(1.0, den), 3)
                     else:
                         info["fps"] = round(float(r_fps), 3)
+                    if info["fps"] < 0.1:
+                        info["fps"] = 24.0
                     
                     nb_frames = s.get("nb_frames")
                     if nb_frames and str(nb_frames).isdigit():
@@ -1389,7 +1391,7 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
         # 4. GENUINE NTSC-RS CLI DSP ENGINE (WHEN VHS MODE IS ACTIVE)
         vhs_mode = settings.get("vhs_mode", False)
         if vhs_mode and self.ntsc_cli_exe and os.path.exists(self.ntsc_cli_exe):
-            ntsc_out = os.path.join(self.cache_dir, f"cached_ntsc_{int(time.time()*1000)}_{os.getpid()}.png")
+            ntsc_out = os.path.join(self.cache_dir, "cached_ntsc_preview.png")
             ntsc_json = self.build_ntsc_settings_json(settings)
             cmd_ntsc = [
                 self.ntsc_cli_exe,
@@ -1663,12 +1665,15 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
                 except Exception: pass
             
             if os.path.exists(sample_out) and os.path.getsize(sample_out) > 50000:
-                if self.potplayer_exe and os.path.exists(self.potplayer_exe):
+                is_pot = bool(self.potplayer_exe and os.path.exists(self.potplayer_exe))
+                if is_pot:
                     subprocess.Popen([self.potplayer_exe, sample_out])
+                    msg = "Playing remastered sample with dual-audio & subtitles in PotPlayer"
                 else:
                     os.startfile(sample_out)
+                    msg = "Playing remastered sample in default system media player"
                 if webview.windows:
-                    webview.windows[0].evaluate_js("onPotPlayerLaunched(true, 'Playing remastered sample with dual-audio & subtitles in PotPlayer')")
+                    webview.windows[0].evaluate_js(f"onPotPlayerLaunched(true, {json.dumps(msg)})")
             else:
                 if webview.windows:
                     webview.windows[0].evaluate_js("onPotPlayerLaunched(false, 'Preview encode failed')")
@@ -1813,7 +1818,13 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
                     fps_regex = re.compile(r"fps=\s*([\d\.]+)")
 
                     for line in self.encoding_process.stderr:
-                        if self.batch_cancel: break
+                        if self.batch_cancel:
+                            try:
+                                self.encoding_process.kill()
+                                self.encoding_process.wait(timeout=2)
+                            except Exception:
+                                pass
+                            break
                         if "frame=" in line:
                             fm = frame_regex.search(line)
                             fpm = fps_regex.search(line)
@@ -1839,7 +1850,16 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
                                 if webview.windows:
                                     webview.windows[0].evaluate_js(f"onBatchProgress({json.dumps(telemetry)})")
 
-                    self.encoding_process.wait()
+                    try:
+                        self.encoding_process.wait(timeout=5)
+                    except Exception:
+                        pass
+
+                if self.batch_cancel:
+                    if os.path.exists(out_file):
+                        try: os.remove(out_file)
+                        except Exception: pass
+                    break
 
                 item_done = os.path.exists(out_file) and os.path.getsize(out_file) > 10000
 

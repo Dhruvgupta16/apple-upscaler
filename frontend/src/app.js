@@ -55,9 +55,9 @@ const DEFAULT_SETTINGS = {
   vhs_ringing_freq: 0.45,
   vhs_ringing_power: 4,
   vhs_chroma_noise: true,
-  vhs_chroma_noise_intensity: 25,
+  vhs_chroma_noise_intensity: 0.25,
   vhs_composite_noise: true,
-  vhs_composite_noise_intensity: 15,
+  vhs_composite_noise_intensity: 0.15,
   line_darken: 0.0,
   cel_deflicker: false,
   audio_eq: false
@@ -376,14 +376,16 @@ function syncAllInputsFromSettings() {
   if (document.getElementById('chkVhsChromaNoise')) {
     document.getElementById('chkVhsChromaNoise').checked = s.vhs_chroma_noise !== false;
   }
-  let cNoisePct = Math.round((s.vhs_chroma_noise_intensity !== undefined ? s.vhs_chroma_noise_intensity : 0.10) * 100);
+  let rawC = s.vhs_chroma_noise_intensity !== undefined ? s.vhs_chroma_noise_intensity : 0.25;
+  let cNoisePct = Math.round(rawC <= 1.0 ? rawC * 100 : rawC);
   setVal('slVhsChromaNoise', cNoisePct);
   setText('valVhsChromaNoise', `${cNoisePct}%`);
 
   if (document.getElementById('chkVhsCompNoise')) {
     document.getElementById('chkVhsCompNoise').checked = s.vhs_composite_noise !== false;
   }
-  let compNoisePct = Math.round((s.vhs_composite_noise_intensity !== undefined ? s.vhs_composite_noise_intensity : 0.05) * 100);
+  let rawComp = s.vhs_composite_noise_intensity !== undefined ? s.vhs_composite_noise_intensity : 0.15;
+  let compNoisePct = Math.round(rawComp <= 1.0 ? rawComp * 100 : rawComp);
   setVal('slVhsCompNoise', compNoisePct);
   setText('valVhsCompNoise', `${compNoisePct}%`);
 
@@ -433,7 +435,8 @@ function formatParamName(key) {
     vhs_ringing_power: "Ringing Power",
     vhs_chroma_noise_intensity: "Chroma Noise",
     vhs_composite_noise_intensity: "Composite Noise",
-    lut_intensity: "LUT Intensity"
+    lut_intensity: "LUT Intensity",
+    cq: "Encoding Quality (CQ/CRF)"
   };
   return names[key] || key.replace(/_/g, ' ').toUpperCase();
 }
@@ -603,6 +606,7 @@ function setupKeyboardShortcuts() {
 
 async function selectMedia(idx) {
   if (idx < 0 || !state.queue || idx >= state.queue.length) return;
+  stopPlayback();
   state.activeIndex = idx;
   try {
     if (window.pywebview && window.pywebview.api) {
@@ -955,6 +959,8 @@ function onToggleAudioEQ(checked) {
 // =========================================================================
 async function refreshFrame() {
   if (state.activeIndex < 0) return;
+  state.frameSeq = (state.frameSeq || 0) + 1;
+  const currentSeq = state.frameSeq;
   
   let loader = document.getElementById('frameLoader');
   if (loader) {
@@ -965,6 +971,7 @@ async function refreshFrame() {
   try {
     if (state.viewMode === 'ab_compare') {
       let res = await window.pywebview.api.get_ab_model_comparison(state.currentSec, state.settings);
+      if (currentSeq !== state.frameSeq) return;
       if (res && res.model_a && res.model_b) {
         let imgB = document.getElementById('imgBefore');
         let imgA = document.getElementById('imgAfter');
@@ -987,6 +994,7 @@ async function refreshFrame() {
     }
 
     let res = await window.pywebview.api.extract_preview_frames(state.currentSec, state.settings);
+    if (currentSeq !== state.frameSeq) return;
     if (res && res.before && res.after) {
       let imgB = document.getElementById('imgBefore');
       let imgA = document.getElementById('imgAfter');
@@ -1261,19 +1269,9 @@ async function setViewMode(mode) {
 }
 
 function toggleZoomMode() {
-  state.isZoomed = !state.isZoomed;
-  const bounds = document.getElementById('canvasBounds');
-  const btn = document.getElementById('btnZoomToggle');
-  if (state.isZoomed) {
-    bounds.classList.add('zoom-100');
-    btn.classList.add('active');
-    document.getElementById('lblZoom').innerText = 'Fit Canvas';
-    showToast("1:1 Pixel Zoom enabled (inspect neural sharpness)");
-  } else {
-    bounds.classList.remove('zoom-100');
-    btn.classList.remove('active');
-    document.getElementById('lblZoom').innerText = '1:1 Zoom';
-  }
+  state.zoomLevel = (state.zoomLevel === 1.0) ? 2.0 : 1.0;
+  applyZoomLevel();
+  showToast(state.zoomLevel === 1.0 ? "Viewport Zoom: 100% Fit" : "Viewport Zoom: 200% Pixel Detail");
 }
 
 function toggleFullscreen() {
@@ -1733,8 +1731,31 @@ function updateBatchQueueUI() {
       <input type="checkbox" ${item.selected_for_batch !== false ? 'checked' : ''} onchange="onItemBatchToggle(${idx}, this.checked)" />
       <span class="queue-item-title" onclick="selectMedia(${idx})" style="cursor:pointer; ${idx === state.activeIndex ? 'color: #ffffff; font-weight: 600;' : ''}" title="${item.filename || item.name}">${idx + 1}. ${item.filename || item.name}</span>
       <span class="queue-status-badge ${item.status.toLowerCase()}">${item.status}</span>
+      <button class="btn-queue-del" onclick="removeQueueItem(${idx}, event)" title="Remove item from queue">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>
     </div>
   `).join('');
+}
+
+async function removeQueueItem(idx, e) {
+  if (e) e.stopPropagation();
+  let res = await window.pywebview.api.remove_queue_item(idx);
+  if (res) {
+    state.queue = res.queue || [];
+    state.activeIndex = res.active_index;
+    updateBatchQueueUI();
+    updateFolderNav();
+    if (state.activeIndex >= 0) {
+      await selectMedia(state.activeIndex);
+    } else {
+      document.getElementById('emptyViewport').style.display = 'flex';
+      document.getElementById('canvasBounds').style.display = 'none';
+      document.getElementById('viewModePill').style.display = 'none';
+      document.getElementById('canvasHud').style.display = 'none';
+      showToast("Media queue is now empty", "info");
+    }
+  }
 }
 
 async function onItemBatchToggle(idx, checked) {
