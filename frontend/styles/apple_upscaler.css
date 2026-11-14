@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
 :root {
   --bg-app: #08090d;
   --bg-surface: #0e1118;
@@ -24,8 +26,8 @@
   --text-dim: #94a3b8;
   --text-muted: #64748b;
   
-  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", -system-ui, sans-serif;
-  --font-mono: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, monospace;
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', ui-monospace, Menlo, Monaco, Consolas, monospace;
   
   --radius-sm: 6px;
   --radius-md: 10px;
@@ -835,18 +837,20 @@ img:not([src]), img[src=""], img[src="#"] {
 }
 
 .studio-card {
-  background: linear-gradient(180deg, rgba(20, 24, 35, 0.85) 0%, rgba(14, 17, 26, 0.94) 100%);
+  background: linear-gradient(180deg, rgba(20, 25, 38, 0.78) 0%, rgba(13, 16, 25, 0.90) 100%);
+  backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: var(--radius-lg);
   padding: 14px 16px;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  box-shadow: 0 8px 32px -4px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.06);
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 .studio-card:hover {
-  border-color: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.15);
+  box-shadow: 0 12px 36px -4px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 .card-head {
   display: flex;
@@ -903,21 +907,37 @@ img:not([src]), img[src=""], img[src="#"] {
   gap: 8px;
 }
 .meta-box {
-  background: var(--bg-input);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: var(--radius-md);
-  padding: 8px 10px;
+  padding: 9px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  transition: all 0.2s ease;
+}
+.meta-box:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.14);
 }
 .meta-box-label {
-  font-size: 9px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
   font-weight: 700;
   color: var(--text-dim);
   text-transform: uppercase;
-  margin-bottom: 2px;
+  letter-spacing: 0.5px;
+}
+.meta-box-label svg {
+  color: var(--accent-cyan);
+  flex-shrink: 0;
 }
 .meta-box-val {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
-  color: var(--text-main);
+  color: #ffffff;
   font-family: var(--font-mono);
 }
 
@@ -987,27 +1007,34 @@ img:not([src]), img[src=""], img[src="#"] {
   background: transparent !important;
 }
 .chip-preset {
-  background: var(--bg-input);
-  border: 1px solid var(--border-subtle);
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   color: var(--text-sub);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
-  padding: 4px 10px;
+  padding: 6px 12px;
   border-radius: var(--radius-pill);
   cursor: pointer;
   white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   transition: all 0.15s ease;
 }
+.chip-preset svg {
+  color: var(--accent-rose);
+  flex-shrink: 0;
+}
 .chip-preset:hover {
-  background: var(--bg-elevated);
+  background: rgba(255, 255, 255, 0.07);
   color: #ffffff;
-  border-color: var(--accent-primary);
+  border-color: rgba(255, 255, 255, 0.16);
 }
 .chip-preset.active {
-  background: var(--accent-primary) !important;
+  background: linear-gradient(135deg, rgba(244, 63, 94, 0.3) 0%, rgba(225, 29, 72, 0.15) 100%) !important;
   color: #ffffff !important;
-  border-color: var(--accent-primary) !important;
-  box-shadow: 0 0 10px rgba(225, 29, 72, 0.45);
+  border-color: var(--accent-rose) !important;
+  box-shadow: 0 0 14px rgba(244, 63, 94, 0.35);
 }
 
 /* ================= 3-WAY COLOR WHEELS (DAVINCI STYLE) ================= */
@@ -1101,6 +1128,19 @@ img:not([src]), img[src=""], img[src="#"] {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+  padding: 9px 12px;
+  transition: all 0.2s ease;
+}
+.slider-row:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+.slider-label-group svg.slider-icon {
+  color: var(--accent-rose);
+  flex-shrink: 0;
 }
 .slider-meta {
   display: flex;

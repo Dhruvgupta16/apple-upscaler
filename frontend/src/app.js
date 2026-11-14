@@ -2,6 +2,7 @@
 // APPLICATION DEFAULT SETTINGS & STATE
 // =========================================================================
 const DEFAULT_SETTINGS = {
+  smart_dynamic_range: true,
   contrast: 1.060,
   gamma: 1.040,
   saturation: 1.150,
@@ -387,6 +388,9 @@ function syncAllInputsFromSettings() {
   setText('valVhsCompNoise', `${compNoisePct}%`);
 
   // Checkboxes
+  if (document.getElementById('chkSmartDynamicRange')) {
+    document.getElementById('chkSmartDynamicRange').checked = s.smart_dynamic_range !== false;
+  }
   if (document.getElementById('chkCelDeflicker')) {
     document.getElementById('chkCelDeflicker').checked = !!s.cel_deflicker;
   }
@@ -404,6 +408,7 @@ function syncAllInputsFromSettings() {
 // =========================================================================
 function formatParamName(key) {
   const names = {
+    smart_dynamic_range: "Smart Dynamic Range Protection",
     exposure: "Exposure Compensation",
     contrast: "Dynamic Contrast",
     saturation: "Color Saturation",
@@ -513,7 +518,7 @@ function resetSingleParam(key) {
 
 function resetCategoryDefaults(catName) {
   const catMap = {
-    color: ['exposure', 'contrast', 'saturation', 'gamma', 'brightness', 'temp', 'sharpness'],
+    color: ['smart_dynamic_range', 'exposure', 'contrast', 'saturation', 'gamma', 'brightness', 'temp', 'sharpness'],
     wheels: ['lift_r', 'lift_g', 'lift_b', 'lift_master', 'gamma_r', 'gamma_g', 'gamma_b', 'gamma_master', 'gain_r', 'gain_g', 'gain_b', 'gain_master'],
     vhs: ['vhs_mode', 'vhs_tape_speed', 'vhs_chroma_loss', 'vhs_chroma_vert_blend', 'vhs_sharpen_enabled', 'vhs_sharpen', 'vhs_sharpen_freq', 'head_switching', 'head_switching_height', 'head_switching_shift', 'head_switching_jitter', 'vhs_edge_wave_enabled', 'vhs_edge_wave', 'vhs_edge_wave_speed', 'vhs_ringing', 'vhs_ringing_freq', 'vhs_ringing_power', 'vhs_chroma_noise', 'vhs_chroma_noise_intensity', 'vhs_composite_noise', 'vhs_composite_noise_intensity'],
     crt: ['crt_scanlines', 'crt_intensity', 'crt_curve'],
@@ -529,6 +534,13 @@ function resetCategoryDefaults(catName) {
   syncAllInputsFromSettings();
   updateLiveGPUGrade();
   showToast(`Reset ${catName} section to default`, 'undo');
+  refreshFrame();
+}
+
+function onToggleSmartDynamicRange(checked) {
+  pushHistory(checked ? "Enable Smart Dynamic Range Protection" : "Disable Smart Dynamic Range Protection");
+  state.settings.smart_dynamic_range = checked;
+  showToast(checked ? "Smart Night/Day dynamic range protection active" : "Dynamic range protection disabled", "sparkles");
   refreshFrame();
 }
 

@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Apple Upscaler Pro</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles/apple_upscaler.css">
 <link rel="stylesheet" href="styles/crt_vhs.css">
 </head>
@@ -305,18 +308,30 @@
         
         <div class="meta-matrix">
           <div class="meta-box">
-            <div class="meta-box-label">Resolution & Aspect</div>
+            <div class="meta-box-label">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
+              Resolution & Aspect
+            </div>
             <div class="meta-box-val" id="valMetaRes">--</div>
           </div>
           <div class="meta-box">
-            <div class="meta-box-label">Codec & Frame Rate</div>
+            <div class="meta-box-label">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="2.18"></rect><line x1="7" y1="2" x2="7" y2="22"></line><line x1="17" y1="2" x2="17" y2="22"></line><line x1="2" y1="12" x2="22" y2="12"></line><line x1="2" y1="7" x2="7" y2="7"></line><line x1="2" y1="17" x2="7" y2="17"></line><line x1="17" y1="17" x2="22" y2="17"></line><line x1="17" y1="7" x2="22" y2="7"></line></svg>
+              Codec & Frame Rate
+            </div>
             <div class="meta-box-val" id="valMetaCodec">--</div>
           </div>
         </div>
 
         <div class="action-grid-2">
-          <button class="btn-subtle" onclick="triggerAddFiles()">+ Add Files</button>
-          <button class="btn-subtle" onclick="triggerAddFolder()">+ Add Folder</button>
+          <button class="btn-subtle" onclick="triggerAddFiles()" style="display:inline-flex; align-items:center; justify-content:center; gap:6px;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line></svg>
+            + Add Files
+          </button>
+          <button class="btn-subtle" onclick="triggerAddFolder()" style="display:inline-flex; align-items:center; justify-content:center; gap:6px;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path><line x1="12" y1="11" x2="12" y2="17"></line><line x1="9" y1="14" x2="15" y2="14"></line></svg>
+            + Add Folder
+          </button>
         </div>
       </div>
 
@@ -327,13 +342,34 @@
           <button class="btn-reset-link" onclick="resetSlidersToDefault()" title="Revert to calibrated default settings">Revert to Default</button>
         </div>
         <div class="quick-preset-bar">
-          <button class="chip-preset" id="preset_apple_master" onclick="quickApplyPreset('apple_master')">Apple Master</button>
-          <button class="chip-preset" id="preset_film_35mm" onclick="quickApplyPreset('film_35mm')">35mm Film</button>
-          <button class="chip-preset" id="preset_ink_sharp" onclick="quickApplyPreset('ink_sharp')">Ink 4K</button>
-          <button class="chip-preset" id="preset_hdr_pop" onclick="quickApplyPreset('hdr_pop')">HDR Pop</button>
-          <button class="chip-preset" id="preset_retro_crt" onclick="quickApplyPreset('retro_crt')">90s CRT</button>
-          <button class="chip-preset" id="preset_vhs_tape" onclick="quickApplyPreset('vhs_tape')">VHS Tape</button>
-          <button class="chip-preset" id="preset_oled_clean" onclick="quickApplyPreset('oled_clean')">OLED Clean</button>
+          <button class="chip-preset" id="preset_apple_master" onclick="quickApplyPreset('apple_master')">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+            Apple Master
+          </button>
+          <button class="chip-preset" id="preset_film_35mm" onclick="quickApplyPreset('film_35mm')">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="2" y="2" width="20" height="20" rx="2.18"></rect><line x1="7" y1="2" x2="7" y2="22"></line><line x1="17" y1="2" x2="17" y2="22"></line><line x1="2" y1="12" x2="22" y2="12"></line></svg>
+            35mm Film
+          </button>
+          <button class="chip-preset" id="preset_ink_sharp" onclick="quickApplyPreset('ink_sharp')">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m15 4 6 6-10 10H5v-6l10-10z"></path></svg>
+            Ink 4K
+          </button>
+          <button class="chip-preset" id="preset_hdr_pop" onclick="quickApplyPreset('hdr_pop')">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line></svg>
+            HDR Pop
+          </button>
+          <button class="chip-preset" id="preset_retro_crt" onclick="quickApplyPreset('retro_crt')">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="2" y="3" width="20" height="14" rx="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
+            90s CRT
+          </button>
+          <button class="chip-preset" id="preset_vhs_tape" onclick="quickApplyPreset('vhs_tape')">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="2" y="4" width="20" height="16" rx="2"></rect><circle cx="8" cy="12" r="2.5"></circle><circle cx="16" cy="12" r="2.5"></circle></svg>
+            VHS Tape
+          </button>
+          <button class="chip-preset" id="preset_oled_clean" onclick="quickApplyPreset('oled_clean')">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4"></path></svg>
+            OLED Clean
+          </button>
         </div>
       </div>
 
@@ -367,7 +403,10 @@
         <div class="color-wheels-container">
           <!-- LIFT WHEEL -->
           <div class="wheel-unit">
-            <div class="wheel-title">Lift (Shadows)</div>
+            <div class="wheel-title">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path></svg>
+              Lift (Shadows)
+            </div>
             <div class="wheel-disc-wrap">
               <div class="wheel-disc-inner" id="wheelLift" onmousedown="startWheelDrag(event, 'lift')" ondblclick="resetSingleWheel('lift')">
                 <div class="wheel-crosshair"></div>
@@ -381,7 +420,10 @@
 
           <!-- GAMMA WHEEL -->
           <div class="wheel-unit">
-            <div class="wheel-title">Gamma (Midtones)</div>
+            <div class="wheel-title">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2"></path></svg>
+              Gamma (Midtones)
+            </div>
             <div class="wheel-disc-wrap">
               <div class="wheel-disc-inner" id="wheelGamma" onmousedown="startWheelDrag(event, 'gamma')" ondblclick="resetSingleWheel('gamma')">
                 <div class="wheel-crosshair"></div>
@@ -395,7 +437,10 @@
 
           <!-- GAIN WHEEL -->
           <div class="wheel-unit">
-            <div class="wheel-title">Gain (Highlights)</div>
+            <div class="wheel-title">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line></svg>
+              Gain (Highlights)
+            </div>
             <div class="wheel-disc-wrap">
               <div class="wheel-disc-inner" id="wheelGain" onmousedown="startWheelDrag(event, 'gain')" ondblclick="resetSingleWheel('gain')">
                 <div class="wheel-crosshair"></div>
@@ -421,13 +466,28 @@
             Reset Color
           </button>
         </div>
+
+        <!-- SMART DYNAMIC RANGE TOGGLE (SOLVES NIGHT VS MORNING DILEMMA) -->
+        <div class="toggle-row">
+          <div class="toggle-label-wrap">
+            <div class="toggle-title">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path></svg>
+              Smart Dynamic Range (Night / Day Balance)
+            </div>
+            <div class="toggle-desc">Protects night shadows from crushing to pitch black while stopping morning daylight burnout</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="chkSmartDynamicRange" checked onchange="onToggleSmartDynamicRange(this.checked)">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
         
         <div class="slider-group">
           
           <div class="slider-row">
             <div class="slider-meta">
               <span class="slider-label-group">
-                <span>Exposure Compensation</span>
+                <svg class="slider-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line></svg><span>Exposure Compensation</span>
                 <button class="btn-param-reset" onclick="resetSingleParam('exposure')" title="Reset Exposure to 0.0 EV">
                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
                 </button>
@@ -441,7 +501,7 @@
           <div class="slider-row">
             <div class="slider-meta">
               <span class="slider-label-group">
-                <span>Dynamic Contrast</span>
+                <svg class="slider-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a10 10 0 0 1 0 20z" fill="currentColor"></path></svg><span>Dynamic Contrast</span>
                 <button class="btn-param-reset" onclick="resetSingleParam('contrast')" title="Reset Contrast to default">
                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
                 </button>
@@ -455,7 +515,7 @@
           <div class="slider-row">
             <div class="slider-meta">
               <span class="slider-label-group">
-                <span>Color Saturation</span>
+                <svg class="slider-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path></svg><span>Color Saturation</span>
                 <button class="btn-param-reset" onclick="resetSingleParam('saturation')" title="Reset Saturation to default">
                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
                 </button>
@@ -469,7 +529,7 @@
           <div class="slider-row">
             <div class="slider-meta">
               <span class="slider-label-group">
-                <span>Shadow De-Fog (Gamma Curve)</span>
+                <svg class="slider-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20h16M4 20c4-12 8-16 16-16"></path></svg><span>Shadow De-Fog (Gamma Curve)</span>
                 <button class="btn-param-reset" onclick="resetSingleParam('gamma')" title="Reset Gamma Curve to default">
                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
                 </button>
@@ -483,7 +543,7 @@
           <div class="slider-row">
             <div class="slider-meta">
               <span class="slider-label-group">
-                <span>Black Pedestal Floor</span>
+                <svg class="slider-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="14" width="18" height="6" rx="1"></rect><line x1="3" y1="9" x2="21" y2="9"></line></svg><span>Black Pedestal Floor</span>
                 <button class="btn-param-reset" onclick="resetSingleParam('brightness')" title="Reset Black Pedestal to default">
                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
                 </button>
@@ -497,7 +557,7 @@
           <div class="slider-row">
             <div class="slider-meta">
               <span class="slider-label-group">
-                <span>Color Temperature</span>
+                <svg class="slider-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"></path></svg><span>Color Temperature</span>
                 <button class="btn-param-reset" onclick="resetSingleParam('temp')" title="Reset Temperature to 0">
                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
                 </button>
@@ -511,7 +571,7 @@
           <div class="slider-row">
             <div class="slider-meta">
               <span class="slider-label-group">
-                <span>AMD CAS Line Sharpening</span>
+                <svg class="slider-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 22 12 12 22 2 12"></polygon></svg><span>AMD CAS Line Sharpening</span>
                 <button class="btn-param-reset" onclick="resetSingleParam('sharpness')" title="Reset Sharpening to default">
                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
                 </button>
@@ -1025,7 +1085,7 @@
         <div class="slider-row">
           <div class="slider-meta">
             <span class="slider-label-group">
-              <span>Line Art Darkener (Ink Infill)</span>
+              <svg class="slider-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 4 6 6-10 10H5v-6l10-10z"></path></svg><span>Line Art Darkener (Ink Infill)</span>
               <button class="btn-param-reset" onclick="resetSingleParam('line_darken')" title="Reset Line Darkener">
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
               </button>
@@ -1054,7 +1114,7 @@
         <div class="slider-row">
           <div class="slider-meta">
             <span class="slider-label-group">
-              <span>Cel Animation Denoise (HQDN3D)</span>
+              <svg class="slider-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h8.5z"></path><line x1="16" y1="8" x2="2" y2="22"></line></svg><span>Cel Animation Denoise (HQDN3D)</span>
               <button class="btn-param-reset" onclick="resetSingleParam('denoise')" title="Reset Denoise">
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
               </button>
@@ -1068,7 +1128,7 @@
         <div class="slider-row">
           <div class="slider-meta">
             <span class="slider-label-group">
-              <span>Organic 35mm Film Grain</span>
+              <svg class="slider-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="1"></circle><circle cx="18" cy="6" r="1"></circle><circle cx="12" cy="12" r="1"></circle><circle cx="6" cy="18" r="1"></circle><circle cx="18" cy="18" r="1"></circle></svg><span>Organic 35mm Film Grain</span>
               <button class="btn-param-reset" onclick="resetSingleParam('grain')" title="Reset Grain">
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
               </button>
