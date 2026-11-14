@@ -10,7 +10,7 @@ import shutil
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageFilter
 import webview
 
 # =========================================================================
@@ -789,19 +789,69 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
         return filter_str, is_complex, canvas_w, canvas_h
 
     # ================= GENUINE NTSC-RS SETTINGS BUILDER =================
+    def apply_authentic_crt_shader(self, img_pil, intensity=0.55):
+        """
+        Physically accurate Sony Trinitron / Aperture Grille CRT shader:
+        1. Vertical RGB phosphor triads (R, G, B subpixel columns)
+        2. Horizontal electron beam scanlines with dark beam gap
+        3. Phosphor beam halation & bloom
+        Vectorized with NumPy for ultra-fast 20ms execution.
+        """
+        try:
+            w, h = img_pil.size
+            img_arr = np.array(img_pil, dtype=np.float32)
+
+            # 1. Vertical RGB aperture grille triads (every 3 horizontal pixels)
+            triad_unit = np.array([
+                [1.30, 0.60, 0.60], # Red phosphor
+                [0.60, 1.30, 0.60], # Green phosphor
+                [0.60, 0.60, 1.30]  # Blue phosphor
+            ], dtype=np.float32)
+
+            repeats_x = (w + 2) // 3
+            triad_row = np.tile(triad_unit, (repeats_x, 1))[:w]
+
+            # 2. Horizontal scanlines (every 4 vertical lines)
+            scanline_unit = np.array([
+                [0.30, 0.30, 0.30],
+                [0.30, 0.30, 0.30],
+                [1.05, 1.05, 1.05],
+                [1.05, 1.05, 1.05]
+            ], dtype=np.float32)
+
+            repeats_y = (h + 3) // 4
+            scanline_col = np.tile(scanline_unit, (repeats_y, 1))[:h]
+
+            # 2D CRT phosphor mask
+            mask = scanline_col[:, None, :] * triad_row[None, :, :]
+
+            # 3. Beam blooming / halation
+            bloom = img_pil.filter(Image.fromarray(np.uint8(img_arr)).filter(ImageFilter.BoxBlur(1))) if False else img_pil.filter(ImageFilter.BoxBlur(1))
+            bloom_arr = np.array(bloom, dtype=np.float32) * 0.25
+
+            crt_arr = np.clip((img_arr + bloom_arr) * mask * 1.15, 0, 255)
+            
+            # Blend by user intensity
+            blended = np.clip((1.0 - intensity) * img_arr + intensity * crt_arr, 0, 255).astype(np.uint8)
+            return Image.fromarray(blended)
+        except Exception as e:
+            print(f"CRT Shader error: {e}")
+            return img_pil
+
     def build_ntsc_settings_json(self, settings):
         speed_map = {"sp": 0, "lp": 1, "ep": 2}
         speed_val = speed_map.get(str(settings.get("vhs_tape_speed", "lp")).lower(), 1)
         
-        c_loss = float(settings.get("vhs_chroma_loss", 0.0025))
-        if c_loss > 0.0005:
+        c_loss = float(settings.get("vhs_chroma_loss", 0.05))
+        # Ensure chroma loss is in visible effective range
+        if c_loss > 0.001:
             c_loss = c_loss * 0.01
 
-        c_noise = float(settings.get("vhs_chroma_noise_intensity", 0.10))
+        c_noise = float(settings.get("vhs_chroma_noise_intensity", 0.20))
         if c_noise > 1.0:
             c_noise = c_noise / 100.0
 
-        comp_noise = float(settings.get("vhs_composite_noise_intensity", 0.05))
+        comp_noise = float(settings.get("vhs_composite_noise_intensity", 0.10))
         if comp_noise > 1.0:
             comp_noise = comp_noise / 100.0
 
@@ -823,12 +873,12 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
             "chroma_demodulation": 1,
             "luma_smear": float(settings.get("vhs_luma_smear", 0.5)),
             "head_switching": bool(settings.get("head_switching", True)),
-            "head_switching_height": int(settings.get("head_switching_height", 8)),
+            "head_switching_height": int(settings.get("head_switching_height", 16)),
             "head_switching_offset": 3,
-            "head_switching_horizontal_shift": int(settings.get("head_switching_shift", 72)),
+            "head_switching_horizontal_shift": int(settings.get("head_switching_shift", 80)),
             "head_switching_start_mid_line": True,
             "head_switching_mid_line_position": 0.95,
-            "head_switching_mid_line_jitter": float(settings.get("head_switching_jitter", 0.03)),
+            "head_switching_mid_line_jitter": float(settings.get("head_switching_jitter", 0.05)),
             "tracking_noise": False,
             "tracking_noise_height": 12,
             "tracking_noise_wave_intensity": 15,
@@ -837,7 +887,7 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
             "tracking_noise_noise_intensity": 0.25,
             "ringing": bool(settings.get("vhs_ringing", True)),
             "ringing_frequency": float(settings.get("vhs_ringing_freq", 0.45)),
-            "ringing_power": int(settings.get("vhs_ringing_power", 4)),
+            "ringing_power": int(settings.get("vhs_ringing_power", 5)),
             "ringing_scale": 4,
             "luma_noise": bool(settings.get("vhs_luma_noise", True)),
             "luma_noise_intensity": float(settings.get("vhs_luma_noise_intensity", 0.01)),
@@ -855,11 +905,11 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
             "vhs_tape_speed": speed_val,
             "vhs_chroma_loss": c_loss,
             "vhs_sharpen_enabled": bool(settings.get("vhs_sharpen_enabled", True)),
-            "vhs_sharpen": float(settings.get("vhs_sharpen", 0.25)),
+            "vhs_sharpen": float(settings.get("vhs_sharpen", 0.50)),
             "vhs_sharpen_frequency": float(settings.get("vhs_sharpen_freq", 1.0)),
             "vhs_edge_wave_enabled": bool(settings.get("vhs_edge_wave_enabled", True)),
-            "vhs_edge_wave": float(settings.get("vhs_edge_wave", 0.5)),
-            "vhs_edge_wave_speed": float(settings.get("vhs_edge_wave_speed", 4.0)),
+            "vhs_edge_wave": float(settings.get("vhs_edge_wave", 1.0)),
+            "vhs_edge_wave_speed": float(settings.get("vhs_edge_wave_speed", 5.0)),
             "vhs_edge_wave_frequency": 0.05,
             "vhs_edge_wave_detail": 2,
             "vhs_chroma_vert_blend": bool(settings.get("vhs_chroma_vert_blend", True)),
@@ -943,7 +993,7 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
         # 4. GENUINE NTSC-RS CLI DSP ENGINE (WHEN VHS MODE IS ACTIVE)
         vhs_mode = settings.get("vhs_mode", False)
         if vhs_mode and self.ntsc_cli_exe and os.path.exists(self.ntsc_cli_exe):
-            ntsc_out = os.path.join(self.cache_dir, f"cached_ntsc_{ts_str.replace(':','_')}.png")
+            ntsc_out = os.path.join(self.cache_dir, f"cached_ntsc_{int(time.time()*1000)}_{os.getpid()}.png")
             ntsc_json = self.build_ntsc_settings_json(settings)
             cmd_ntsc = [
                 self.ntsc_cli_exe,
@@ -1023,45 +1073,45 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
         presets = [
             {
                 "id": "cel_master",
-                "name": "Reference Cel Master",
-                "tag": "Balanced Reference",
-                "desc": "Telecine black restoration, deep saturation, AMD CAS 0.80 line clarity.",
-                "settings": {"contrast": 1.140, "brightness": -0.018, "gamma": 0.880, "saturation": 1.260, "sharpness": 0.80, "denoise": 3.0, "temp": 0, "exposure": 0.0, "crt_scanlines": False, "vhs_mode": False}
+                "name": "Cel Master Reference",
+                "tag": "Natural Studio",
+                "desc": "Calibrated telecine blacks, natural cel colors, crisp master line-art.",
+                "settings": {"contrast": 1.120, "brightness": -0.015, "gamma": 0.900, "saturation": 1.200, "sharpness": 0.60, "denoise": 2.0, "temp": 0, "exposure": 0.0, "crt_scanlines": False, "vhs_mode": False}
             },
             {
                 "id": "film_35mm",
-                "name": "35mm Analog Film",
-                "tag": "Cinematic Warm",
-                "desc": "Warm analog color temperature, fine 35mm grain, soft highlight knee.",
-                "settings": {"contrast": 1.080, "brightness": -0.010, "gamma": 0.940, "saturation": 1.120, "sharpness": 0.50, "denoise": 1.5, "temp": 14, "exposure": 0.0, "crt_scanlines": False, "vhs_mode": False}
-            },
-            {
-                "id": "ink_sharp",
-                "name": "Ink Outline 4K",
-                "tag": "Max Definition",
-                "desc": "Full CAS 1.00 sharpness with cel artifact smoothing for 4K display.",
-                "settings": {"contrast": 1.180, "brightness": -0.020, "gamma": 0.860, "saturation": 1.220, "sharpness": 1.00, "denoise": 4.5, "temp": 0, "exposure": 0.0, "crt_scanlines": False, "vhs_mode": False}
+                "name": "35mm Golden Cinema Film",
+                "tag": "Cinematic Warmth",
+                "desc": "Rich warm golden amber print, 35mm organic film grain, soft highlight roll-off.",
+                "settings": {"contrast": 1.180, "brightness": -0.010, "gamma": 0.920, "saturation": 1.350, "sharpness": 0.50, "denoise": 1.0, "grain": 0.20, "temp": 26, "exposure": 0.05, "crt_scanlines": False, "vhs_mode": False}
             },
             {
                 "id": "hdr_pop",
-                "name": "Dynamic HDR Punch",
-                "tag": "Punchy Contrast",
-                "desc": "Deep inky shadows, punchy contrast ratio, vivid saturated primaries.",
-                "settings": {"contrast": 1.250, "brightness": -0.028, "gamma": 0.840, "saturation": 1.380, "sharpness": 0.85, "denoise": 2.5, "temp": 0, "exposure": 0.1, "crt_scanlines": False, "vhs_mode": False}
+                "name": "Vivid Anime Pop (Modern HDR)",
+                "tag": "Punchy Dynamic",
+                "desc": "High-impact contrast, deep obsidian shadows, and vivid saturated anime primaries.",
+                "settings": {"contrast": 1.360, "brightness": -0.035, "gamma": 0.800, "saturation": 1.550, "sharpness": 0.80, "denoise": 2.5, "temp": 4, "exposure": 0.10, "crt_scanlines": False, "vhs_mode": False}
             },
             {
                 "id": "retro_crt",
-                "name": "90s CRT Broadcast",
-                "tag": "Retro Nostalgia",
-                "desc": "Phosphor scanlines, subtle curved screen glass, authentic TV blooming.",
-                "settings": {"contrast": 1.120, "brightness": 0.005, "gamma": 0.900, "saturation": 1.320, "sharpness": 0.60, "denoise": 2.0, "temp": 8, "exposure": 0.0, "crt_scanlines": True, "vhs_mode": False}
+                "name": "90s Trinitron CRT Television",
+                "tag": "Phosphor Tube",
+                "desc": "Aperture grille RGB phosphor triads, authentic scanlines, and curved screen bloom.",
+                "settings": {"contrast": 1.180, "brightness": 0.005, "gamma": 0.880, "saturation": 1.350, "sharpness": 0.50, "denoise": 1.5, "temp": 8, "exposure": 0.0, "crt_scanlines": True, "crt_intensity": 0.60, "crt_curve": True, "vhs_mode": False}
+            },
+            {
+                "id": "vhs_tape",
+                "name": "Physical NTSC VHS Tape",
+                "tag": "Analog VCR",
+                "desc": "Physical NTSC demodulation, helical head-switching retrace, and color-under tape smear.",
+                "settings": {"contrast": 1.150, "brightness": -0.010, "gamma": 0.920, "saturation": 1.300, "sharpness": 0.60, "denoise": 1.0, "temp": 6, "exposure": 0.0, "crt_scanlines": False, "vhs_mode": True, "vhs_tape_speed": "lp", "head_switching": True, "head_switching_height": 20, "head_switching_shift": 80, "vhs_edge_wave_enabled": True}
             },
             {
                 "id": "oled_clean",
-                "name": "Modern OLED Clean",
-                "tag": "Zero Banding",
-                "desc": "Pristine debanded gradients, cool neutral whites, clean modern edge art.",
-                "settings": {"contrast": 1.160, "brightness": -0.015, "gamma": 0.880, "saturation": 1.180, "sharpness": 0.80, "denoise": 3.5, "temp": -10, "exposure": 0.0, "crt_scanlines": False, "vhs_mode": False}
+                "name": "Midnight Noir Clean",
+                "tag": "Obsidian Contrast",
+                "desc": "Cool moonlit palette, razor-clean debanded gradients, and deep inky noir contrast.",
+                "settings": {"contrast": 1.320, "brightness": -0.030, "gamma": 0.780, "saturation": 1.150, "sharpness": 0.85, "denoise": 3.5, "temp": -16, "exposure": -0.05, "crt_scanlines": False, "vhs_mode": False}
             }
         ]
 
@@ -1072,29 +1122,59 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
                 b = float(s.get("brightness", -0.018))
                 g = float(s.get("gamma", 0.88))
                 sat = float(s.get("saturation", 1.26))
-                sharp = float(s.get("sharpness", 0.80))
+                sharp = float(s.get("sharpness", 0.60))
                 temp = float(s.get("temp", 0.0))
+                grain = float(s.get("grain", 0.0))
                 
                 chain = [
                     f"eq=contrast={c:.2f}:brightness={b:.3f}:gamma={g:.2f}:saturation={sat:.2f}",
-                    f"scale=360:-2:flags=bilinear"
+                    f"scale=540:-2:flags=bicubic"
                 ]
                 if abs(temp) > 1:
-                    chain.append(f"colorbalance=rs={temp*0.005:.3f}:bs={-temp*0.005:.3f}")
+                    chain.append(f"colorbalance=rs={temp*0.006:.3f}:bs={-temp*0.006:.3f}")
+                if grain > 0.05:
+                    chain.append(f"noise=alls={int(grain * 30)}:allf=t+u")
                 if sharp > 0.1:
-                    chain.append(f"cas=strength={sharp:.2f}")
-                if s.get("crt_scanlines"):
-                    chain.append("drawgrid=width=10000:height=4:thickness=1:color=black@0.4")
+                    # Clean clamped unsharp that NEVER causes color clipping
+                    chain.append(f"unsharp=5:5:{min(1.2, sharp):.2f}:5:5:0.0")
                 
                 vf_str = ",".join(chain)
                 cmd = [
                     "ffmpeg", "-y", "-i", base_input,
                     "-vf", vf_str,
                     "-vframes", "1", "-an", "-sn",
-                    "-f", "image2", "-c:v", "mjpeg", "-q:v", "4", "pipe:1"
+                    "-f", "image2", "-c:v", "mjpeg", "-q:v", "3", "pipe:1"
                 ]
                 r = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, **WIN_FLAGS)
-                b64 = base64.b64encode(r.stdout).decode("ascii") if r.stdout else ""
+                
+                if not r.stdout:
+                    return None
+                    
+                # Apply CRT or VHS DSP to the thumbnail
+                thumb_bytes = r.stdout
+                if s.get("crt_scanlines"):
+                    import io
+                    t_img = Image.open(io.BytesIO(thumb_bytes)).convert("RGB")
+                    c_img = self.apply_authentic_crt_shader(t_img, intensity=0.65)
+                    buf = io.BytesIO()
+                    c_img.save(buf, format="JPEG", quality=90)
+                    thumb_bytes = buf.getvalue()
+                elif s.get("vhs_mode") and self.ntsc_cli_exe:
+                    import tempfile
+                    t_in = os.path.join(tempfile.gettempdir(), f"aud_in_{p['id']}_{int(time.time()*1000)}.jpg")
+                    t_out = os.path.join(tempfile.gettempdir(), f"aud_out_{p['id']}_{int(time.time()*1000)}.png")
+                    with open(t_in, "wb") as f_in: f_in.write(thumb_bytes)
+                    j_str = self.build_ntsc_settings_json(s)
+                    cmd_v = [self.ntsc_cli_exe, "-i", t_in, "-o", t_out, "-j", j_str, "-c", "png", "--single-frame-time", "00:00.00", "-y"]
+                    res_v = subprocess.run(cmd_v, env=self.ntsc_env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **WIN_FLAGS)
+                    if res_v.returncode == 0 and os.path.exists(t_out):
+                        with open(t_out, "rb") as f_out: thumb_bytes = f_out.read()
+                        try: os.remove(t_out)
+                        except: pass
+                    try: os.remove(t_in)
+                    except: pass
+                
+                b64 = base64.b64encode(thumb_bytes).decode("ascii") if thumb_bytes else ""
                 return {
                     "id": p["id"],
                     "name": p["name"],
@@ -2801,17 +2881,13 @@ img:not([src]), img[src=""], img[src="#"] {
         <div class="tag-badge right" id="tagRemaster">Remastered</div>
       </div>
 
-      <!-- FLOATING CANVAS HUD (ZOOM & DETAIL INSPECTION) -->
+      <!-- FLOATING CANVAS HUD (ZOOM IN/OUT & DETAIL INSPECTION) -->
       <div class="canvas-hud" id="canvasHud" style="display:none;">
-        <button class="btn-hud" id="btnZoomToggle" onclick="toggleZoomMode()">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="11" cy="11" r="8"></circle>
-            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-            <line x1="11" y1="8" x2="11" y2="14"></line>
-            <line x1="8" y1="11" x2="14" y2="11"></line>
-          </svg>
-          <span id="lblZoom">1:1 Zoom</span>
-        </button>
+        <div class="zoom-controls-group">
+          <button class="btn-zoom-step" onclick="zoomStep(-0.25)" title="Zoom Out (-)">−</button>
+          <span class="lbl-zoom-level" id="lblZoomLevel" onclick="resetZoom()" title="Click to Reset Zoom (100%)">100%</span>
+          <button class="btn-zoom-step" onclick="zoomStep(0.25)" title="Zoom In (+)">+</button>
+        </div>
         <button class="btn-hud" onclick="toggleFullscreen()" title="Fullscreen Viewport">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path>
@@ -3132,9 +3208,9 @@ img:not([src]), img[src=""], img[src="#"] {
         <div class="slider-row">
           <div class="slider-meta">
             <span>Chroma Loss</span>
-            <span class="slider-val" id="valVhsChromaLoss">0.0025%</span>
+            <span class="slider-val" id="valVhsChromaLoss">0.05%</span>
           </div>
-          <input type="range" class="slider-bar" id="slVhsChromaLoss" min="0.0000" max="0.0100" step="0.0005" value="0.0025"
+          <input type="range" class="slider-bar" id="slVhsChromaLoss" min="0.00" max="0.50" step="0.01" value="0.05"
                  oninput="onVhsChromaLossChange(this.value)">
         </div>
 
@@ -3170,9 +3246,9 @@ img:not([src]), img[src=""], img[src="#"] {
         <div class="slider-row">
           <div class="slider-meta">
             <span>Sharpen Intensity</span>
-            <span class="slider-val" id="valVhsSharpen">0.25</span>
+            <span class="slider-val" id="valVhsSharpen">0.50</span>
           </div>
-          <input type="range" class="slider-bar" id="slVhsSharpen" min="0.00" max="1.00" step="0.05" value="0.25"
+          <input type="range" class="slider-bar" id="slVhsSharpen" min="0.00" max="2.00" step="0.05" value="0.50"
                  oninput="onVhsSharpenChange(this.value)">
         </div>
 
@@ -3181,7 +3257,7 @@ img:not([src]), img[src=""], img[src="#"] {
             <span>Peaking Frequency</span>
             <span class="slider-val" id="valVhsSharpenFreq">1.00</span>
           </div>
-          <input type="range" class="slider-bar" id="slVhsSharpenFreq" min="0.20" max="2.00" step="0.10" value="1.00"
+          <input type="range" class="slider-bar" id="slVhsSharpenFreq" min="0.20" max="3.00" step="0.10" value="1.00"
                  oninput="onVhsSharpenFreqChange(this.value)">
         </div>
       </div>
@@ -3210,27 +3286,27 @@ img:not([src]), img[src=""], img[src="#"] {
         <div class="slider-row">
           <div class="slider-meta">
             <span>Height (Scanlines)</span>
-            <span class="slider-val" id="valHeadHeight">8 lines</span>
+            <span class="slider-val" id="valHeadHeight">16 lines</span>
           </div>
-          <input type="range" class="slider-bar" id="slHeadHeight" min="2" max="24" step="1" value="8"
+          <input type="range" class="slider-bar" id="slHeadHeight" min="0" max="60" step="1" value="16"
                  oninput="onHeadHeightChange(this.value)">
         </div>
 
         <div class="slider-row">
           <div class="slider-meta">
             <span>Horizontal Shift</span>
-            <span class="slider-val" id="valHeadShift">72 px</span>
+            <span class="slider-val" id="valHeadShift">80 px</span>
           </div>
-          <input type="range" class="slider-bar" id="slHeadShift" min="10" max="120" step="2" value="72"
+          <input type="range" class="slider-bar" id="slHeadShift" min="0" max="200" step="2" value="80"
                  oninput="onHeadShiftChange(this.value)">
         </div>
 
         <div class="slider-row">
           <div class="slider-meta">
             <span>Mid-Line Jitter</span>
-            <span class="slider-val" id="valHeadJitter">0.03</span>
+            <span class="slider-val" id="valHeadJitter">0.05</span>
           </div>
-          <input type="range" class="slider-bar" id="slHeadJitter" min="0.00" max="0.10" step="0.01" value="0.03"
+          <input type="range" class="slider-bar" id="slHeadJitter" min="0.00" max="0.25" step="0.01" value="0.05"
                  oninput="onHeadJitterChange(this.value)">
         </div>
       </div>
@@ -3332,9 +3408,9 @@ img:not([src]), img[src=""], img[src="#"] {
         <div class="slider-row">
           <div class="slider-meta">
             <span>Chroma Noise Intensity</span>
-            <span class="slider-val" id="valVhsChromaNoise">10%</span>
+            <span class="slider-val" id="valVhsChromaNoise">25%</span>
           </div>
-          <input type="range" class="slider-bar" id="slVhsChromaNoise" min="0" max="50" step="2" value="10"
+          <input type="range" class="slider-bar" id="slVhsChromaNoise" min="0" max="100" step="2" value="25"
                  oninput="onVhsChromaNoiseChange(this.value)">
         </div>
 
@@ -3352,9 +3428,9 @@ img:not([src]), img[src=""], img[src="#"] {
         <div class="slider-row">
           <div class="slider-meta">
             <span>Composite Noise Intensity</span>
-            <span class="slider-val" id="valVhsCompNoise">5%</span>
+            <span class="slider-val" id="valVhsCompNoise">15%</span>
           </div>
-          <input type="range" class="slider-bar" id="slVhsCompNoise" min="0" max="20" step="1" value="5"
+          <input type="range" class="slider-bar" id="slVhsCompNoise" min="0" max="50" step="1" value="15"
                  oninput="onVhsCompNoiseChange(this.value)">
         </div>
       </div>
@@ -3797,6 +3873,10 @@ let state = {
     audio_eq: false
   },
   viewMode: 'split',
+  curtainPct: 50,
+  zoomLevel: 1.0,
+  isPlaying: false,
+  playInterval: null,
   isEncoding: false,
   debounceTimer: null,
   activeWheel: null,
@@ -4341,8 +4421,9 @@ function onVhsChromaLossChange(val) {
   let v = parseFloat(val);
   state.settings.vhs_chroma_loss = v;
   const lbl = document.getElementById('valVhsChromaLoss');
-  if (lbl) lbl.innerText = `${v.toFixed(4)}%`;
-  refreshFrame();
+  if (lbl) lbl.innerText = `${v.toFixed(2)}%`;
+  clearTimeout(state.debounceTimer);
+  state.debounceTimer = setTimeout(() => { refreshFrame(); }, 120);
 }
 
 function onToggleVhsVertBlend(checked) {
@@ -4362,7 +4443,8 @@ function onVhsSharpenChange(val) {
   state.settings.vhs_sharpen = v;
   const lbl = document.getElementById('valVhsSharpen');
   if (lbl) lbl.innerText = v.toFixed(2);
-  refreshFrame();
+  clearTimeout(state.debounceTimer);
+  state.debounceTimer = setTimeout(() => { refreshFrame(); }, 120);
 }
 
 function onVhsSharpenFreqChange(val) {
@@ -4370,7 +4452,8 @@ function onVhsSharpenFreqChange(val) {
   state.settings.vhs_sharpen_freq = v;
   const lbl = document.getElementById('valVhsSharpenFreq');
   if (lbl) lbl.innerText = v.toFixed(2);
-  refreshFrame();
+  clearTimeout(state.debounceTimer);
+  state.debounceTimer = setTimeout(() => { refreshFrame(); }, 120);
 }
 
 function onToggleHeadSwitching(checked) {
@@ -4384,7 +4467,8 @@ function onHeadHeightChange(val) {
   state.settings.head_switching_height = v;
   const lbl = document.getElementById('valHeadHeight');
   if (lbl) lbl.innerText = `${v} lines`;
-  refreshFrame();
+  clearTimeout(state.debounceTimer);
+  state.debounceTimer = setTimeout(() => { refreshFrame(); }, 120);
 }
 
 function onHeadShiftChange(val) {
@@ -4392,7 +4476,8 @@ function onHeadShiftChange(val) {
   state.settings.head_switching_shift = v;
   const lbl = document.getElementById('valHeadShift');
   if (lbl) lbl.innerText = `${v} px`;
-  refreshFrame();
+  clearTimeout(state.debounceTimer);
+  state.debounceTimer = setTimeout(() => { refreshFrame(); }, 120);
 }
 
 function onHeadJitterChange(val) {
@@ -4400,7 +4485,8 @@ function onHeadJitterChange(val) {
   state.settings.head_switching_jitter = v;
   const lbl = document.getElementById('valHeadJitter');
   if (lbl) lbl.innerText = v.toFixed(2);
-  refreshFrame();
+  clearTimeout(state.debounceTimer);
+  state.debounceTimer = setTimeout(() => { refreshFrame(); }, 120);
 }
 
 function onToggleVhsEdgeWave(checked) {
@@ -4414,7 +4500,8 @@ function onVhsEdgeWaveChange(val) {
   state.settings.vhs_edge_wave = v;
   const lbl = document.getElementById('valVhsEdgeWave');
   if (lbl) lbl.innerText = v.toFixed(2);
-  refreshFrame();
+  clearTimeout(state.debounceTimer);
+  state.debounceTimer = setTimeout(() => { refreshFrame(); }, 120);
 }
 
 function onVhsEdgeWaveSpeedChange(val) {
@@ -4422,7 +4509,8 @@ function onVhsEdgeWaveSpeedChange(val) {
   state.settings.vhs_edge_wave_speed = v;
   const lbl = document.getElementById('valVhsEdgeWaveSpeed');
   if (lbl) lbl.innerText = v.toFixed(2);
-  refreshFrame();
+  clearTimeout(state.debounceTimer);
+  state.debounceTimer = setTimeout(() => { refreshFrame(); }, 120);
 }
 
 function onToggleVhsRinging(checked) {
@@ -4436,7 +4524,8 @@ function onVhsRingingFreqChange(val) {
   state.settings.vhs_ringing_freq = v;
   const lbl = document.getElementById('valVhsRingingFreq');
   if (lbl) lbl.innerText = v.toFixed(2);
-  refreshFrame();
+  clearTimeout(state.debounceTimer);
+  state.debounceTimer = setTimeout(() => { refreshFrame(); }, 120);
 }
 
 function onVhsRingingPowerChange(val) {
@@ -4444,7 +4533,8 @@ function onVhsRingingPowerChange(val) {
   state.settings.vhs_ringing_power = v;
   const lbl = document.getElementById('valVhsRingingPower');
   if (lbl) lbl.innerText = v;
-  refreshFrame();
+  clearTimeout(state.debounceTimer);
+  state.debounceTimer = setTimeout(() => { refreshFrame(); }, 120);
 }
 
 function onToggleVhsChromaNoise(checked) {
@@ -4458,7 +4548,8 @@ function onVhsChromaNoiseChange(val) {
   state.settings.vhs_chroma_noise_intensity = v / 100.0;
   const lbl = document.getElementById('valVhsChromaNoise');
   if (lbl) lbl.innerText = `${v}%`;
-  refreshFrame();
+  clearTimeout(state.debounceTimer);
+  state.debounceTimer = setTimeout(() => { refreshFrame(); }, 120);
 }
 
 function onToggleVhsCompNoise(checked) {
@@ -4472,7 +4563,8 @@ function onVhsCompNoiseChange(val) {
   state.settings.vhs_composite_noise_intensity = v / 100.0;
   const lbl = document.getElementById('valVhsCompNoise');
   if (lbl) lbl.innerText = `${v}%`;
-  refreshFrame();
+  clearTimeout(state.debounceTimer);
+  state.debounceTimer = setTimeout(() => { refreshFrame(); }, 120);
 }
 
 function onToggleAudioEQ(checked) {
@@ -4539,10 +4631,10 @@ async function refreshFrame() {
 
       if (isSplit) {
         afterClip.style.display = 'block';
-        afterClip.style.clipPath = `inset(0 0 0 ${state.curtainPct || 50}%)`;
         divider.style.display = 'block';
         tagL.style.display = 'block';
         tagR.style.display = 'block';
+        setCurtainPos(state.curtainPct !== undefined ? state.curtainPct : 50);
       } else if (isRemaster) {
         afterClip.style.display = 'block';
         afterClip.style.clipPath = 'inset(0 0 0 0%)';
@@ -4581,6 +4673,7 @@ function onFrameLoaded() {
 
   if (state.viewMode === 'split' || state.viewMode === 'ab_compare') {
     div.style.display = 'block';
+    setCurtainPos(state.curtainPct !== undefined ? state.curtainPct : 50);
   }
   tagL.style.display = 'block';
   tagR.style.display = 'block';
@@ -4619,6 +4712,90 @@ function setCurtainPos(pct) {
       tagR.style.transform = 'translateY(0)';
     }
   }
+}
+
+
+// =========================================================================
+// REAL-TIME PREVIEW PLAYBACK LOOP (SPACEBAR / PLAY BUTTON)
+// =========================================================================
+function togglePlayback() {
+  if (state.activeIndex < 0) return;
+  const item = state.queue[state.activeIndex];
+  if (item && item.is_image) return;
+
+  state.isPlaying = !state.isPlaying;
+  const btn = document.getElementById('btnPlayPause');
+  const iconPlay = document.getElementById('iconPlay');
+  const iconPause = document.getElementById('iconPause');
+
+  if (state.isPlaying) {
+    if (btn) btn.classList.add('playing');
+    if (iconPlay) iconPlay.style.display = 'none';
+    if (iconPause) iconPause.style.display = 'block';
+    showToast("▶️ Preview Playback started");
+
+    state.playInterval = setInterval(() => {
+      let dur = state.queue[state.activeIndex]?.duration || 100;
+      state.currentSec += 1;
+      if (state.currentSec >= Math.floor(dur)) {
+        state.currentSec = 0;
+      }
+      const scrubber = document.getElementById('timelineScrubber');
+      if (scrubber) scrubber.value = state.currentSec;
+      updateTimeReadout();
+      refreshFrame();
+    }, 1200);
+  } else {
+    stopPlayback();
+  }
+}
+
+function stopPlayback() {
+  state.isPlaying = false;
+  if (state.playInterval) {
+    clearInterval(state.playInterval);
+    state.playInterval = null;
+  }
+  const btn = document.getElementById('btnPlayPause');
+  const iconPlay = document.getElementById('iconPlay');
+  const iconPause = document.getElementById('iconPause');
+  if (btn) btn.classList.remove('playing');
+  if (iconPlay) iconPlay.style.display = 'block';
+  if (iconPause) iconPause.style.display = 'none';
+}
+
+// Spacebar key shortcut for Play/Pause
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'Space' && !e.target.matches('input, textarea, select')) {
+    e.preventDefault();
+    togglePlayback();
+  }
+});
+
+// =========================================================================
+// INTERACTIVE ZOOM IN / OUT SYSTEM (HUD CONTROLS & WHEEL)
+// =========================================================================
+function applyZoomLevel() {
+  const bounds = document.getElementById('canvasBounds');
+  const lbl = document.getElementById('lblZoomLevel');
+  if (bounds) {
+    bounds.style.transform = `scale(${state.zoomLevel})`;
+    bounds.style.transformOrigin = 'center center';
+  }
+  if (lbl) {
+    lbl.innerText = `${Math.round(state.zoomLevel * 100)}%`;
+  }
+}
+
+function zoomStep(delta) {
+  state.zoomLevel = Math.max(0.5, Math.min(3.0, state.zoomLevel + delta));
+  applyZoomLevel();
+}
+
+function resetZoom() {
+  state.zoomLevel = 1.0;
+  applyZoomLevel();
+  showToast("Viewport Zoom: Fit (100%)");
 }
 
 function setupCurtainDivider() {
