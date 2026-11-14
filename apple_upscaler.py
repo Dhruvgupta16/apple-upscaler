@@ -350,9 +350,14 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
             self.active_index = index
             self.cached_media_path = ""
             self.cached_ts_str = ""
-            self.cached_source_file = ""
-            self.cached_ai_scaled_file = ""
             self.cached_ai_model = ""
+            self.cached_source_file = os.path.join(self.cache_dir, "cached_source.jpg")
+            self.cached_ai_scaled_file = os.path.join(self.cache_dir, "cached_ai_scaled.png")
+            try:
+                if os.path.exists(self.cached_source_file): os.remove(self.cached_source_file)
+                if os.path.exists(self.cached_ai_scaled_file): os.remove(self.cached_ai_scaled_file)
+            except Exception:
+                pass
             return self.queue[index]
         return None
 
@@ -769,10 +774,16 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
         ai_model = settings.get("ai_model", "realesr-animevideov3")
 
         # 1. SMART BASE-FRAME CACHING (ONLY SEEK VIDEO OR RUN AI WHEN TIMESTAMP CHANGES)
+        if not self.cached_source_file:
+            self.cached_source_file = os.path.join(self.cache_dir, "cached_source.jpg")
+        if not self.cached_ai_scaled_file:
+            self.cached_ai_scaled_file = os.path.join(self.cache_dir, "cached_ai_scaled.png")
+
         need_source_extract = (
             self.cached_media_path != in_path or
             self.cached_ts_str != ts_str or
-            not os.path.exists(self.cached_source_file)
+            not os.path.exists(self.cached_source_file) or
+            os.path.getsize(self.cached_source_file) < 1000
         )
 
         if need_source_extract:
@@ -1217,6 +1228,7 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
 HTML_UI = """<!DOCTYPE html>
 <html lang="en">
 <head>
+<link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAB0klEQVR4nO2av07DMBDGP3+6oUMREyNrJBb2vgG8ThmYGRnK68AbdGep1JUnQHToVhREUagS50/v4lbn35I2US+27zuf6zOQyWQ8E3Bi3D9f72LPXx8/VNtMOEcsjM4nk1ovvmy3oc37xd1lm/mdpgoCRhyApsHYyz7W+fXb5881h8A5T4LzGmWsnq6int97X9vzSbPA/GAgykGIYdX5khwCSERVBW3ZwRLCOYRzCOeEFC9dNCyUHhLMBYRzgqVHrdFQjCABt9Np7f33zWb0thDOCRqyb/KoNVXFDA0HQQJuiuLf99V6jVQQzgkWsj/08LF0UcjQcBAoo935Q5va4UI4J2jI3sLrMdpU0CccRKtRF7PZ3+ev5RLnAuEcHmugTv6lGqqK0KZ8p1bYUcXKr+zPSfp7COeItsGqCsowOHVVhKEpcOzU1zcldk2FhHMI5xDOIZxDOEc0Zt9UGUHjrzHhHMI5EntYXUAsgOS7wBbbYoRzCOeI1mw8VibIm6LKEM4RLUNtC6O+0rWsBZjXBlcKDR6rXkg4J2icCDmF8vjQErkgAbGTIGMPJuEcsTQ+5MxP3W8sVRFSnBJrilUtO30gnCOWxvt6SEsZmUwmk0E3vgEF3bB4NixrnAAAAABJRU5ErkJggg==" />
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Apple Upscaler Pro</title>
@@ -2478,12 +2490,8 @@ img:not([src]), img[src=""], img[src="#"] {
     <!-- TOPBAR -->
     <header class="topbar">
       <div class="brand-group">
-        <div class="brand-logo">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.5">
-            <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
-            <polyline points="2 17 12 22 22 17"></polyline>
-            <polyline points="2 12 12 17 22 12"></polyline>
-          </svg>
+        <div class="brand-logo" style="background: transparent; border: none; box-shadow: none; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; padding: 0; margin-right: 2px;">
+          <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAB0klEQVR4nO2av07DMBDGP3+6oUMREyNrJBb2vgG8ThmYGRnK68AbdGep1JUnQHToVhREUagS50/v4lbn35I2US+27zuf6zOQyWQ8E3Bi3D9f72LPXx8/VNtMOEcsjM4nk1ovvmy3oc37xd1lm/mdpgoCRhyApsHYyz7W+fXb5881h8A5T4LzGmWsnq6int97X9vzSbPA/GAgykGIYdX5khwCSERVBW3ZwRLCOYRzCOeEFC9dNCyUHhLMBYRzgqVHrdFQjCABt9Np7f33zWb0thDOCRqyb/KoNVXFDA0HQQJuiuLf99V6jVQQzgkWsj/08LF0UcjQcBAoo935Q5va4UI4J2jI3sLrMdpU0CccRKtRF7PZ3+ev5RLnAuEcHmugTv6lGqqK0KZ8p1bYUcXKr+zPSfp7COeItsGqCsowOHVVhKEpcOzU1zcldk2FhHMI5xDOIZxDOEc0Zt9UGUHjrzHhHMI5EntYXUAsgOS7wBbbYoRzCOeI1mw8VibIm6LKEM4RLUNtC6O+0rWsBZjXBlcKDR6rXkg4J2icCDmF8vjQErkgAbGTIGMPJuEcsTQ+5MxP3W8sVRFSnBJrilUtO30gnCOWxvt6SEsZmUwmk0E3vgEF3bB4NixrnAAAAABJRU5ErkJggg==" alt="Apple Upscaler Logo" style="width: 28px; height: 28px; image-rendering: pixelated; object-fit: contain; display: block;" />
         </div>
         <div class="brand-title" id="lblAppName">Apple Upscaler</div>
         <div class="brand-badge" id="lblAppEdition" style="background: rgba(225, 29, 72, 0.2); border: 1px solid rgba(225, 29, 72, 0.4); color: #fb7185;">Neural Pro</div>
@@ -4158,6 +4166,7 @@ function onToggleParam(key, checked) {
 // =========================================================================
 function quickApplyPreset(presetId) {
   let presets = {
+    apple_master: {"contrast": 1.140, "brightness": -0.018, "gamma": 0.880, "saturation": 1.260, "sharpness": 0.80, "denoise": 3.0, "temp": 0, "exposure": 0.0, "crt_scanlines": false, "vhs_mode": false},
     cel_master: {"contrast": 1.140, "brightness": -0.018, "gamma": 0.880, "saturation": 1.260, "sharpness": 0.80, "denoise": 3.0, "temp": 0, "exposure": 0.0, "crt_scanlines": false, "vhs_mode": false},
     film_35mm: {"contrast": 1.080, "brightness": -0.010, "gamma": 0.940, "saturation": 1.120, "sharpness": 0.50, "denoise": 1.5, "temp": 14, "exposure": 0.0, "crt_scanlines": false, "vhs_mode": false},
     ink_sharp: {"contrast": 1.180, "brightness": -0.020, "gamma": 0.860, "saturation": 1.220, "sharpness": 1.00, "denoise": 4.5, "temp": 0, "exposure": 0.0, "crt_scanlines": false, "vhs_mode": false},
