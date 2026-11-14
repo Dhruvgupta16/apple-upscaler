@@ -710,13 +710,14 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
 
         # RETRO CRT SCANLINES
         if crt_scanlines and not for_preview:
-            chain.append(f"drawgrid=width=10000:height=4:thickness=1:color=black@{crt_intensity:.2f}")
+            chain.append(f"drawgrid=width=10000:height=4:thickness=1:color=black@{crt_intensity*0.75:.2f}")
+            chain.append(f"drawgrid=width=3:height=10000:thickness=1:color=black@{crt_intensity*0.35:.2f}")
             
         # VHS Fallback only when ntsc-rs CLI binary is not available
         if vhs_mode and not (self.ntsc_cli_exe and os.path.exists(self.ntsc_cli_exe)):
             s_val = max(1, int(round(vhs_chroma)))
             la_val = min(1.5, max(0.2, vhs_ringing * 2.0))
-            chain.append(f"unsharp=lx=5:ly=1:la={la_val:.2f}:cx=7:cy=1:ca=-0.60")
+            chain.append(f"unsharp=lx=7:ly=3:la={la_val:.2f}:cx=7:cy=3:ca=-0.60")
             chain.append(f"rgbashift=rh={-s_val}:bh={s_val}:rv=0:bv=0")
             if not for_preview:
                 chain.append("noise=c0s=2:c1s=5:c2s=5:allf=t+u")
@@ -789,50 +790,56 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
         return filter_str, is_complex, canvas_w, canvas_h
 
     # ================= GENUINE NTSC-RS SETTINGS BUILDER =================
-    def apply_authentic_crt_shader(self, img_pil, intensity=0.55):
+    def apply_authentic_crt_shader(self, img_pil, intensity=0.75):
         """
-        Physically accurate Sony Trinitron / Aperture Grille CRT shader:
-        1. Vertical RGB phosphor triads (R, G, B subpixel columns)
-        2. Horizontal electron beam scanlines with dark beam gap
-        3. Phosphor beam halation & bloom
-        Vectorized with NumPy for ultra-fast 20ms execution.
+        Physically accurate Sony Trinitron Aperture Grille & Slot-Mask CRT shader:
+        1. Vertical RGB phosphor triads (R, G, B subpixel columns with slot separation)
+        2. Cosine electron beam scanlines with deep interstitial gaps
+        3. Dynamic phosphor bloom & halation in high-luminance areas
+        Vectorized with NumPy for ultra-fast 25ms execution.
         """
         try:
             w, h = img_pil.size
             img_arr = np.array(img_pil, dtype=np.float32)
 
-            # 1. Vertical RGB aperture grille triads (every 3 horizontal pixels)
-            triad_unit = np.array([
-                [1.30, 0.60, 0.60], # Red phosphor
-                [0.60, 1.30, 0.60], # Green phosphor
-                [0.60, 0.60, 1.30]  # Blue phosphor
-            ], dtype=np.float32)
-
-            repeats_x = (w + 2) // 3
-            triad_row = np.tile(triad_unit, (repeats_x, 1))[:w]
-
-            # 2. Horizontal scanlines (every 4 vertical lines)
-            scanline_unit = np.array([
-                [0.30, 0.30, 0.30],
-                [0.30, 0.30, 0.30],
-                [1.05, 1.05, 1.05],
-                [1.05, 1.05, 1.05]
-            ], dtype=np.float32)
-
-            repeats_y = (h + 3) // 4
-            scanline_col = np.tile(scanline_unit, (repeats_y, 1))[:h]
-
-            # 2D CRT phosphor mask
-            mask = scanline_col[:, None, :] * triad_row[None, :, :]
-
-            # 3. Beam blooming / halation
-            bloom = img_pil.filter(Image.fromarray(np.uint8(img_arr)).filter(ImageFilter.BoxBlur(1))) if False else img_pil.filter(ImageFilter.BoxBlur(1))
-            bloom_arr = np.array(bloom, dtype=np.float32) * 0.25
-
-            crt_arr = np.clip((img_arr + bloom_arr) * mask * 1.15, 0, 255)
+            # 1. Authentic Trinitron Phosphor Triad Cell (4 rows x 3 cols x 3 RGB channels)
+            cell = np.zeros((4, 3, 3), dtype=np.float32)
             
-            # Blend by user intensity
-            blended = np.clip((1.0 - intensity) * img_arr + intensity * crt_arr, 0, 255).astype(np.uint8)
+            # Phosphor emission per subpixel:
+            p_weights = np.array([
+                [1.40, 0.25, 0.25], # R phosphor stripe
+                [0.25, 1.40, 0.25], # G phosphor stripe
+                [0.25, 0.25, 1.40]  # B phosphor stripe
+            ], dtype=np.float32)
+
+            # Scanline electron beam profile:
+            # Row 0: Beam crest (1.38)
+            # Row 1: Beam shoulder (1.10)
+            # Row 2: Deep scanline gap (0.15)
+            # Row 3: Scanline gap (0.25)
+            s_weights = np.array([1.38, 1.10, 0.15, 0.25], dtype=np.float32)
+
+            for y in range(4):
+                for x in range(3):
+                    # Staggered aperture grille slots
+                    slot_damper = 0.85 if ((y // 2 + x) % 2 == 1) else 1.0
+                    cell[y, x] = p_weights[x] * s_weights[y] * slot_damper
+
+            tile_y = (h + 3) // 4
+            tile_x = (w + 2) // 3
+            mask = np.tile(cell, (tile_y, tile_x, 1))[:h, :w]
+
+            # 2. Phosphor Halation & Glow (bloom on highlights)
+            bloom = np.array(img_pil.filter(ImageFilter.BoxBlur(1)), dtype=np.float32)
+            luma = (0.299 * img_arr[:, :, 0] + 0.587 * img_arr[:, :, 1] + 0.114 * img_arr[:, :, 2]) / 255.0
+            bloom_factor = np.clip((luma[:, :, None] - 0.20) * 0.40, 0.0, 0.35)
+
+            emissive = img_arr * (1.0 + bloom_factor) + bloom * (bloom_factor * 0.5)
+
+            crt_out = np.clip(emissive * mask * 1.12, 0, 255)
+            
+            # User intensity blend
+            blended = np.clip((1.0 - intensity) * img_arr + intensity * crt_out, 0, 255).astype(np.uint8)
             return Image.fromarray(blended)
         except Exception as e:
             print(f"CRT Shader error: {e}")
@@ -1019,7 +1026,22 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
             "-f", "image2", "-c:v", "mjpeg", "-q:v", "2", "pipe:1"
         ]
         res_a = subprocess.run(cmd_a, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, **WIN_FLAGS)
-        b64_a = base64.b64encode(res_a.stdout).decode("ascii") if res_a.stdout else ""
+        out_bytes = res_a.stdout
+
+        # Apply Authentic Trinitron CRT shader directly to remastered frame if active
+        if settings.get("crt_scanlines") and out_bytes:
+            try:
+                import io
+                pil_remastered = Image.open(io.BytesIO(out_bytes)).convert("RGB")
+                crt_intensity = float(settings.get("crt_intensity", 0.70))
+                crt_applied = self.apply_authentic_crt_shader(pil_remastered, intensity=crt_intensity)
+                buf_crt = io.BytesIO()
+                crt_applied.save(buf_crt, format="JPEG", quality=92)
+                out_bytes = buf_crt.getvalue()
+            except Exception as e_crt:
+                print(f"Error applying CRT shader to preview frame: {e_crt}")
+
+        b64_a = base64.b64encode(out_bytes).decode("ascii") if out_bytes else ""
 
         return {
             "before": f"data:image/jpeg;base64,{self.cached_b64_source}",
@@ -1073,45 +1095,45 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
         presets = [
             {
                 "id": "cel_master",
-                "name": "Cel Master Reference",
-                "tag": "Natural Studio",
-                "desc": "Calibrated telecine blacks, natural cel colors, crisp master line-art.",
-                "settings": {"contrast": 1.120, "brightness": -0.015, "gamma": 0.900, "saturation": 1.200, "sharpness": 0.60, "denoise": 2.0, "temp": 0, "exposure": 0.0, "crt_scanlines": False, "vhs_mode": False}
+                "name": "Studio Cel Reference",
+                "tag": "Natural Cel",
+                "desc": "Calibrated studio telecine balance, crisp original cel contours, reference neutral contrast.",
+                "settings": {"contrast": 1.050, "brightness": -0.010, "gamma": 0.950, "saturation": 1.050, "sharpness": 0.50, "denoise": 2.0, "temp": 0, "exposure": 0.0, "crt_scanlines": False, "vhs_mode": False}
             },
             {
                 "id": "film_35mm",
                 "name": "35mm Golden Cinema Film",
-                "tag": "Cinematic Warmth",
-                "desc": "Rich warm golden amber print, 35mm organic film grain, soft highlight roll-off.",
-                "settings": {"contrast": 1.180, "brightness": -0.010, "gamma": 0.920, "saturation": 1.350, "sharpness": 0.50, "denoise": 1.0, "grain": 0.20, "temp": 26, "exposure": 0.05, "crt_scanlines": False, "vhs_mode": False}
+                "tag": "Warm Analog Film",
+                "desc": "Rich warm golden amber print, 35mm organic film grain, soft warm highlight roll-off.",
+                "settings": {"contrast": 1.200, "brightness": -0.010, "gamma": 0.900, "saturation": 1.400, "sharpness": 0.50, "denoise": 1.0, "grain": 0.25, "temp": 35, "exposure": 0.05, "crt_scanlines": False, "vhs_mode": False}
             },
             {
                 "id": "hdr_pop",
-                "name": "Vivid Anime Pop (Modern HDR)",
-                "tag": "Punchy Dynamic",
-                "desc": "High-impact contrast, deep obsidian shadows, and vivid saturated anime primaries.",
-                "settings": {"contrast": 1.360, "brightness": -0.035, "gamma": 0.800, "saturation": 1.550, "sharpness": 0.80, "denoise": 2.5, "temp": 4, "exposure": 0.10, "crt_scanlines": False, "vhs_mode": False}
+                "name": "Vivid Neon Anime Pop",
+                "tag": "Punchy HDR",
+                "desc": "High-impact dynamic contrast, deep obsidian blacks, and glowing saturated anime primaries.",
+                "settings": {"contrast": 1.450, "brightness": -0.025, "gamma": 0.760, "saturation": 1.850, "sharpness": 0.85, "denoise": 2.5, "temp": 2, "exposure": 0.10, "crt_scanlines": False, "vhs_mode": False}
             },
             {
                 "id": "retro_crt",
                 "name": "90s Trinitron CRT Television",
                 "tag": "Phosphor Tube",
-                "desc": "Aperture grille RGB phosphor triads, authentic scanlines, and curved screen bloom.",
-                "settings": {"contrast": 1.180, "brightness": 0.005, "gamma": 0.880, "saturation": 1.350, "sharpness": 0.50, "denoise": 1.5, "temp": 8, "exposure": 0.0, "crt_scanlines": True, "crt_intensity": 0.60, "crt_curve": True, "vhs_mode": False}
+                "desc": "Authentic Sony Trinitron aperture grille RGB phosphor triads, scanlines, and tube bloom.",
+                "settings": {"contrast": 1.180, "brightness": 0.005, "gamma": 0.880, "saturation": 1.350, "sharpness": 0.50, "denoise": 1.5, "temp": 8, "exposure": 0.0, "crt_scanlines": True, "crt_intensity": 0.75, "crt_curve": True, "vhs_mode": False}
             },
             {
                 "id": "vhs_tape",
-                "name": "Physical NTSC VHS Tape",
-                "tag": "Analog VCR",
-                "desc": "Physical NTSC demodulation, helical head-switching retrace, and color-under tape smear.",
-                "settings": {"contrast": 1.150, "brightness": -0.010, "gamma": 0.920, "saturation": 1.300, "sharpness": 0.60, "denoise": 1.0, "temp": 6, "exposure": 0.0, "crt_scanlines": False, "vhs_mode": True, "vhs_tape_speed": "lp", "head_switching": True, "head_switching_height": 20, "head_switching_shift": 80, "vhs_edge_wave_enabled": True}
+                "name": "Physical NTSC VHS Cassette",
+                "tag": "Analog Tape",
+                "desc": "Genuine NTSC demodulation, horizontal chroma smear, luma ringing, and helical head tracking band.",
+                "settings": {"contrast": 1.180, "brightness": -0.010, "gamma": 0.920, "saturation": 1.450, "sharpness": 0.60, "denoise": 1.0, "temp": 6, "exposure": 0.0, "crt_scanlines": False, "vhs_mode": True, "vhs_tape_speed": "lp", "head_switching": True, "head_switching_height": 24, "head_switching_shift": 90, "vhs_edge_wave_enabled": True}
             },
             {
                 "id": "oled_clean",
-                "name": "Midnight Noir Clean",
-                "tag": "Obsidian Contrast",
-                "desc": "Cool moonlit palette, razor-clean debanded gradients, and deep inky noir contrast.",
-                "settings": {"contrast": 1.320, "brightness": -0.030, "gamma": 0.780, "saturation": 1.150, "sharpness": 0.85, "denoise": 3.5, "temp": -16, "exposure": -0.05, "crt_scanlines": False, "vhs_mode": False}
+                "name": "Midnight Cyber Noir",
+                "tag": "Cold Moonlit",
+                "desc": "Cool cyan/blue moonlit palette, razor-clean debanded shadows, and dramatic obsidian contrast.",
+                "settings": {"contrast": 1.380, "brightness": -0.030, "gamma": 0.800, "saturation": 1.100, "sharpness": 0.85, "denoise": 3.5, "temp": -28, "exposure": -0.05, "crt_scanlines": False, "vhs_mode": False}
             }
         ]
 
@@ -1131,12 +1153,19 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
                     f"scale=540:-2:flags=bicubic"
                 ]
                 if abs(temp) > 1:
-                    chain.append(f"colorbalance=rs={temp*0.006:.3f}:bs={-temp*0.006:.3f}")
+                    if temp > 0:
+                        chain.append("colorchannelmixer=rr=1.15:rg=0.08:rb=-0.05:gg=1.02:gb=-0.05:br=-0.10:bg=-0.05:bb=0.85")
+                    else:
+                        chain.append("colorchannelmixer=rr=0.75:rg=0.0:rb=0.0:gg=0.88:gb=0.12:br=0.12:bg=0.22:bb=1.30")
                 if grain > 0.05:
-                    chain.append(f"noise=alls={int(grain * 30)}:allf=t+u")
+                    chain.append(f"noise=alls={int(grain * 45)}:allf=t+u")
                 if sharp > 0.1:
-                    # Clean clamped unsharp that NEVER causes color clipping
-                    chain.append(f"unsharp=5:5:{min(1.2, sharp):.2f}:5:5:0.0")
+                    chain.append(f"unsharp=7:3:{min(1.2, sharp):.2f}:7:3:0.0")
+                if p["id"] == "vhs_tape" or s.get("vhs_mode"):
+                    chain.append("rgbashift=rh=-4:bh=4")
+                    chain.append("drawbox=y=ih-16:color=black:width=iw:height=16:t=fill")
+                    chain.append("drawbox=y=ih-14:color=white@0.6:width=iw:height=2:t=fill")
+                    chain.append("drawbox=y=ih-8:color=cyan@0.5:width=iw:height=2:t=fill")
                 
                 vf_str = ",".join(chain)
                 cmd = [
@@ -1150,29 +1179,15 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
                 if not r.stdout:
                     return None
                     
-                # Apply CRT or VHS DSP to the thumbnail
+                # Apply CRT DSP to the thumbnail
                 thumb_bytes = r.stdout
                 if s.get("crt_scanlines"):
                     import io
                     t_img = Image.open(io.BytesIO(thumb_bytes)).convert("RGB")
-                    c_img = self.apply_authentic_crt_shader(t_img, intensity=0.65)
+                    c_img = self.apply_authentic_crt_shader(t_img, intensity=0.80)
                     buf = io.BytesIO()
                     c_img.save(buf, format="JPEG", quality=90)
                     thumb_bytes = buf.getvalue()
-                elif s.get("vhs_mode") and self.ntsc_cli_exe:
-                    import tempfile
-                    t_in = os.path.join(tempfile.gettempdir(), f"aud_in_{p['id']}_{int(time.time()*1000)}.jpg")
-                    t_out = os.path.join(tempfile.gettempdir(), f"aud_out_{p['id']}_{int(time.time()*1000)}.png")
-                    with open(t_in, "wb") as f_in: f_in.write(thumb_bytes)
-                    j_str = self.build_ntsc_settings_json(s)
-                    cmd_v = [self.ntsc_cli_exe, "-i", t_in, "-o", t_out, "-j", j_str, "-c", "png", "--single-frame-time", "00:00.00", "-y"]
-                    res_v = subprocess.run(cmd_v, env=self.ntsc_env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **WIN_FLAGS)
-                    if res_v.returncode == 0 and os.path.exists(t_out):
-                        with open(t_out, "rb") as f_out: thumb_bytes = f_out.read()
-                        try: os.remove(t_out)
-                        except: pass
-                    try: os.remove(t_in)
-                    except: pass
                 
                 b64 = base64.b64encode(thumb_bytes).decode("ascii") if thumb_bytes else ""
                 return {
@@ -1789,10 +1804,11 @@ img:not([src]), img[src=""], img[src="#"] {
   z-index: 22;
   display: none;
   background: 
-    linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.55) 50%),
-    linear-gradient(90deg, rgba(255, 0, 0, 0.08), rgba(0, 255, 0, 0.04), rgba(0, 0, 255, 0.08));
-  background-size: 100% 3px, 3px 100%;
-  box-shadow: inset 0 0 90px rgba(0, 0, 0, 0.7);
+    linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.75) 50%),
+    linear-gradient(90deg, rgba(255, 0, 0, 0.22), rgba(0, 255, 0, 0.12), rgba(0, 0, 255, 0.22));
+  background-size: 100% 4px, 3px 100%;
+  box-shadow: inset 0 0 100px rgba(0, 0, 0, 0.85);
+  mix-blend-mode: multiply;
 }
 
 .crt-curved {
@@ -1943,16 +1959,76 @@ img:not([src]), img[src=""], img[src="#"] {
 .canvas-hud {
   position: absolute;
   bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
   z-index: 30;
-  background: rgba(16, 18, 26, 0.88);
+  background: rgba(18, 20, 29, 0.92);
   backdrop-filter: blur(16px);
   border: 1px solid var(--border-bright);
   padding: 4px 8px;
   border-radius: var(--radius-pill);
   display: flex;
   align-items: center;
-  gap: 6px;
-  box-shadow: 0 8px 30px rgba(0,0,0,0.65);
+  gap: 8px;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.7);
+}
+.zoom-controls-group {
+  display: flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-pill);
+  padding: 2px 4px;
+  gap: 4px;
+}
+.btn-zoom-step {
+  background: transparent;
+  border: none;
+  color: #ffffff;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-pill);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.btn-zoom-step:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+}
+.lbl-zoom-level {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent-red);
+  min-width: 40px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+}
+.btn-zoom-reset {
+  background: rgba(225, 29, 72, 0.15);
+  border: 1px solid rgba(225, 29, 72, 0.45);
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  letter-spacing: 0.3px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.btn-zoom-reset:hover {
+  background: var(--accent-red);
+  border-color: var(--accent-red);
+  color: #ffffff;
+  box-shadow: 0 0 10px rgba(225, 29, 72, 0.45);
 }
 .btn-hud {
   background: transparent;
@@ -1960,7 +2036,7 @@ img:not([src]), img[src=""], img[src="#"] {
   color: var(--text-sub);
   font-size: 11px;
   font-weight: 600;
-  padding: 5px 12px;
+  padding: 5px 10px;
   border-radius: var(--radius-pill);
   cursor: pointer;
   transition: all 0.15s ease;
@@ -2075,12 +2151,48 @@ img:not([src]), img[src=""], img[src="#"] {
   color: var(--text-main);
   border-color: var(--border-bright);
 }
+.btn-deck-play {
+  width: 32px;
+  height: 28px;
+  min-width: 32px;
+  background: rgba(225, 29, 72, 0.18);
+  border: 1px solid rgba(225, 29, 72, 0.45);
+  color: #ffffff;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.btn-deck-play:hover {
+  background: var(--accent-red);
+  box-shadow: 0 0 12px rgba(225, 29, 72, 0.5);
+  color: #fff;
+}
+.btn-deck-play.playing {
+  background: var(--accent-red);
+  border-color: #ff4d6d;
+  box-shadow: 0 0 14px rgba(225, 29, 72, 0.7);
+  animation: pulsePlay 1.5s infinite;
+}
+@keyframes pulsePlay {
+  0% { box-shadow: 0 0 6px rgba(225, 29, 72, 0.4); }
+  50% { box-shadow: 0 0 16px rgba(225, 29, 72, 0.8); }
+  100% { box-shadow: 0 0 6px rgba(225, 29, 72, 0.4); }
+}
 
 .scrubber-zone {
   flex: 1;
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+.scrubber-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
 }
 .scrubber-readout {
   display: flex;
@@ -2649,31 +2761,31 @@ img:not([src]), img[src=""], img[src="#"] {
   background: var(--bg-panel);
   border: 1px solid var(--border-bright);
   border-radius: var(--radius-lg);
-  width: 920px;
-  max-width: 95vw;
-  max-height: 90vh;
+  width: 1140px;
+  max-width: 96vw;
+  max-height: 92vh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  box-shadow: 0 24px 64px rgba(0,0,0,0.8);
+  box-shadow: 0 24px 64px rgba(0,0,0,0.85);
 }
 .modal-head {
-  padding: 16px 20px;
+  padding: 16px 24px;
   border-bottom: 1px solid var(--border-subtle);
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
-.modal-title { font-size: 14px; font-weight: 700; color: #ffffff; }
-.btn-close-modal { background: transparent; border: none; color: var(--text-dim); font-size: 18px; cursor: pointer; }
-.btn-close-modal:hover { color: #ffffff; }
+.modal-title { font-size: 15px; font-weight: 700; color: #ffffff; letter-spacing: 0.3px; }
+.btn-close-modal { background: transparent; border: none; color: var(--text-dim); font-size: 20px; cursor: pointer; padding: 4px 8px; border-radius: 4px; }
+.btn-close-modal:hover { color: #ffffff; background: rgba(255,255,255,0.1); }
 
 .modal-body {
-  padding: 20px;
+  padding: 24px;
   overflow-y: auto;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
+  gap: 20px;
 }
 .audition-card {
   background: var(--bg-elevated);
@@ -2681,18 +2793,18 @@ img:not([src]), img[src=""], img[src="#"] {
   border-radius: var(--radius-md);
   overflow: hidden;
   cursor: pointer;
-  transition: all 0.2s var(--ease-fluid);
+  transition: all 0.22s var(--ease-fluid);
   display: flex;
   flex-direction: column;
 }
 .audition-card:hover {
-  border-color: var(--accent-primary);
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(82, 70, 234, 0.3);
+  border-color: var(--accent-red);
+  transform: translateY(-4px) scale(1.02);
+  box-shadow: 0 12px 32px rgba(225, 29, 72, 0.35);
 }
 .audition-thumb-wrap {
   width: 100%;
-  height: 140px;
+  height: 180px;
   background: #000000;
   display: flex;
   align-items: center;
@@ -2700,11 +2812,11 @@ img:not([src]), img[src=""], img[src="#"] {
   overflow: hidden;
 }
 .audition-thumb { width: 100%; height: 100%; object-fit: cover; }
-.audition-info { padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; }
-.audition-name-row { display: flex; align-items: center; justify-content: space-between; }
-.audition-name { font-weight: 600; font-size: 12px; color: #ffffff; }
-.audition-tag { font-size: 9px; font-weight: 700; color: var(--accent-cyan); background: rgba(56, 189, 248, 0.15); padding: 1px 6px; border-radius: var(--radius-pill); text-transform: uppercase; }
-.audition-desc { font-size: 11px; color: var(--text-sub); line-height: 1.3; }
+.audition-info { padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; }
+.audition-name-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.audition-name { font-weight: 700; font-size: 13px; color: #ffffff; }
+.audition-tag { font-size: 10px; font-weight: 700; color: #ff4d6d; background: rgba(225, 29, 72, 0.15); border: 1px solid rgba(225, 29, 72, 0.3); padding: 2px 8px; border-radius: var(--radius-pill); text-transform: uppercase; letter-spacing: 0.5px; }
+.audition-desc { font-size: 11px; color: var(--text-sub); line-height: 1.4; }
 
 /* TOAST */
 .toast-msg {
@@ -2862,12 +2974,9 @@ img:not([src]), img[src=""], img[src="#"] {
         
         <div class="layer-after-clip" id="afterClip">
           <img class="layer-after" id="imgAfter" style="display:none;" onload="this.style.display='block';" onerror="this.style.display='none';" />
-          <!-- VHS HEAD-SWITCHING TRACKING BAND AT BOTTOM OF REMASTERED FRAME -->
-          
+          <!-- CRT OVERLAY APPLIED DIRECTLY OVER AFTER/REMASTER LAYER -->
+          <div class="crt-overlay" id="crtOverlay"></div>
         </div>
-
-        <!-- CRT OVERLAYS -->
-        <div class="crt-overlay" id="crtOverlay"></div>
 
         <div class="curtain-divider" id="curtainDivider">
           <div class="curtain-knob">
@@ -2884,9 +2993,10 @@ img:not([src]), img[src=""], img[src="#"] {
       <!-- FLOATING CANVAS HUD (ZOOM IN/OUT & DETAIL INSPECTION) -->
       <div class="canvas-hud" id="canvasHud" style="display:none;">
         <div class="zoom-controls-group">
-          <button class="btn-zoom-step" onclick="zoomStep(-0.25)" title="Zoom Out (-)">−</button>
-          <span class="lbl-zoom-level" id="lblZoomLevel" onclick="resetZoom()" title="Click to Reset Zoom (100%)">100%</span>
+          <button class="btn-zoom-step" onclick="zoomStep(-0.25)" title="Zoom Out (−)">−</button>
+          <span class="lbl-zoom-level" id="lblZoomLevel">100%</span>
           <button class="btn-zoom-step" onclick="zoomStep(0.25)" title="Zoom In (+)">+</button>
+          <button class="btn-zoom-reset" id="btnZoomReset" onclick="resetZoom()" title="Reset to 100% Default">100% Reset</button>
         </div>
         <button class="btn-hud" onclick="toggleFullscreen()" title="Fullscreen Viewport">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -2937,8 +3047,19 @@ img:not([src]), img[src=""], img[src="#"] {
 
           <span id="lblFrameTech">Ready</span>
         </div>
-        <input type="range" class="scrubber-track" id="timelineScrubber" min="0" max="100" value="0"
-               oninput="onScrubInput(this.value)" onchange="onScrubCommit(this.value)">
+        <div class="scrubber-bar-row">
+          <button class="btn-deck-play" id="btnPlayPause" onclick="togglePlayback()" title="Play / Pause Preview (Spacebar)">
+            <svg id="iconPlay" width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+              <polygon points="5 3 19 12 5 21 5 3"></polygon>
+            </svg>
+            <svg id="iconPause" width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style="display:none;">
+              <rect x="6" y="4" width="4" height="16"></rect>
+              <rect x="14" y="4" width="4" height="16"></rect>
+            </svg>
+          </button>
+          <input type="range" class="scrubber-track" id="timelineScrubber" min="0" max="100" value="0"
+                 oninput="onScrubInput(this.value)" onchange="onScrubCommit(this.value)">
+        </div>
       </div>
     </footer>
 
@@ -3463,10 +3584,10 @@ img:not([src]), img[src=""], img[src="#"] {
         <div class="slider-row">
           <div class="slider-meta">
             <span>Scanline Intensity</span>
-            <span class="slider-val" id="valCrtIntensity">35%</span>
+            <span class="slider-val" id="valCrtIntensity">70%</span>
           </div>
-          <input type="range" class="slider-bar" id="slCrtIntensity" min="0.1" max="0.8" step="0.05" value="0.35"
-                 oninput="onCrtIntensityChange(this.value)">
+          <input type="range" class="slider-bar" id="slCrtIntensity" min="0.1" max="1.0" step="0.05" value="0.70"
+                 oninput="onCrtIntensityChange(this.value)" onchange="refreshFrame()">
         </div>
 
         <div class="toggle-row">
@@ -3845,7 +3966,7 @@ let state = {
     gamma_r: 0.0, gamma_g: 0.0, gamma_b: 0.0, gamma_master: 0.0,
     gain_r: 0.0, gain_g: 0.0, gain_b: 0.0, gain_master: 0.0,
     crt_scanlines: false,
-    crt_intensity: 0.35,
+    crt_intensity: 0.70,
     crt_curve: false,
     vhs_mode: false,
     vhs_tape_speed: "lp",
@@ -4089,8 +4210,8 @@ function syncAllInputsFromSettings() {
     const crt = document.getElementById('crtOverlay');
     if (crt) crt.style.display = s.crt_scanlines ? 'block' : 'none';
   }
-  setVal('slCrtIntensity', s.crt_intensity || 0.35);
-  setText('valCrtIntensity', `${Math.round((s.crt_intensity || 0.35) * 100)}%`);
+  setVal('slCrtIntensity', s.crt_intensity || 0.70);
+  setText('valCrtIntensity', `${Math.round((s.crt_intensity || 0.70) * 100)}%`);
 
   if (document.getElementById('chkCrtCurve')) {
     document.getElementById('chkCrtCurve').checked = !!s.crt_curve;
@@ -4378,6 +4499,7 @@ function onToggleCRTScanlines(checked) {
   const overlay = document.getElementById('crtOverlay');
   if (overlay) overlay.style.display = checked ? 'block' : 'none';
   showToast(checked ? "Trinitron CRT Phosphor Triads active" : "CRT Scanlines disabled");
+  refreshFrame();
 }
 
 function onCrtIntensityChange(val) {
