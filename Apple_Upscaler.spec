@@ -12,6 +12,7 @@ datas = [
     ('ai_models', 'ai_models'),
     ('luts', 'luts'),
     ('branding.json', '.'),
+    ('frontend', 'frontend'),
 ] + webview_datas + clr_datas + py_datas
 
 binaries = webview_binaries + clr_binaries + py_binaries
