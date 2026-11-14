@@ -6,6 +6,7 @@ import json
 import base64
 import threading
 import subprocess
+import shutil
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
 import numpy as np
@@ -250,6 +251,24 @@ class UniversalStudioBackend:
         self.active_index = -1
         self.potplayer_exe = find_potplayer()
         self.realesrgan_exe = get_realesrgan_binary()
+        
+        # GENUINE NTSC-RS CLI DSP ENGINE DETECTION
+        self.ntsc_cli_exe = None
+        for c in [
+            os.path.join(get_base_dir(), "bin", "ntsc-rs-cli.exe"),
+            r"C:\Users\dhruv\Downloads\Compressed\ntsc-rs-windows-standalone\ntsc-rs-windows-standalone\bin\ntsc-rs-cli.exe",
+            shutil.which("ntsc-rs-cli"),
+            shutil.which("ntsc-rs-cli.exe")
+        ]:
+            if c and os.path.exists(c):
+                self.ntsc_cli_exe = c
+                break
+
+        self.ntsc_bin_dir = os.path.dirname(self.ntsc_cli_exe) if self.ntsc_cli_exe else None
+        self.ntsc_env = os.environ.copy()
+        if self.ntsc_bin_dir:
+            self.ntsc_env["PATH"] = self.ntsc_bin_dir + os.pathsep + self.ntsc_env.get("PATH", "")
+
         self.is_encoding = False
         self.batch_cancel = False
         self.encoding_process = None
@@ -689,18 +708,15 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
         if grain > 0.01 and not for_preview:
             chain.append(f"noise=alls={int(grain * 25)}:allf=t+u")
 
-        # RETRO CRT SCANLINES & AUTHENTIC NTSC VHS TAPE EFFECT
+        # RETRO CRT SCANLINES
         if crt_scanlines and not for_preview:
             chain.append(f"drawgrid=width=10000:height=4:thickness=1:color=black@{crt_intensity:.2f}")
             
-        if vhs_mode:
+        # VHS Fallback only when ntsc-rs CLI binary is not available
+        if vhs_mode and not (self.ntsc_cli_exe and os.path.exists(self.ntsc_cli_exe)):
             s_val = max(1, int(round(vhs_chroma)))
             la_val = min(1.5, max(0.2, vhs_ringing * 2.0))
-            # Authentic NTSC composite demodulation:
-            # 1. Horizontal luma unsharp (edge peaking / ringing overshoot)
-            # 2. Horizontal chroma blur (color-under lowpass smear)
             chain.append(f"unsharp=lx=5:ly=1:la={la_val:.2f}:cx=7:cy=1:ca=-0.60")
-            # 3. Horizontal chroma subcarrier delay
             chain.append(f"rgbashift=rh={-s_val}:bh={s_val}:rv=0:bv=0")
             if not for_preview:
                 chain.append("noise=c0s=2:c1s=5:c2s=5:allf=t+u")
@@ -772,6 +788,90 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
 
         return filter_str, is_complex, canvas_w, canvas_h
 
+    # ================= GENUINE NTSC-RS SETTINGS BUILDER =================
+    def build_ntsc_settings_json(self, settings):
+        speed_map = {"sp": 0, "lp": 1, "ep": 2}
+        speed_val = speed_map.get(str(settings.get("vhs_tape_speed", "lp")).lower(), 1)
+        
+        c_loss = float(settings.get("vhs_chroma_loss", 0.0025))
+        if c_loss > 0.0005:
+            c_loss = c_loss * 0.01
+
+        c_noise = float(settings.get("vhs_chroma_noise_intensity", 0.10))
+        if c_noise > 1.0:
+            c_noise = c_noise / 100.0
+
+        comp_noise = float(settings.get("vhs_composite_noise_intensity", 0.05))
+        if comp_noise > 1.0:
+            comp_noise = comp_noise / 100.0
+
+        cfg = {
+            "random_seed": 0,
+            "use_field": 4,
+            "filter_type": 1,
+            "input_luma_filter": 2,
+            "chroma_lowpass_in": 2,
+            "composite_preemphasis": 1,
+            "composite_noise": bool(settings.get("vhs_composite_noise", True)),
+            "composite_noise_intensity": comp_noise,
+            "composite_noise_frequency": 0.5,
+            "composite_noise_detail": 1,
+            "snow_intensity": 0.00025,
+            "snow_anisotropy": 0.5,
+            "video_scanline_phase_shift": 2,
+            "video_scanline_phase_shift_offset": 0,
+            "chroma_demodulation": 1,
+            "luma_smear": float(settings.get("vhs_luma_smear", 0.5)),
+            "head_switching": bool(settings.get("head_switching", True)),
+            "head_switching_height": int(settings.get("head_switching_height", 8)),
+            "head_switching_offset": 3,
+            "head_switching_horizontal_shift": int(settings.get("head_switching_shift", 72)),
+            "head_switching_start_mid_line": True,
+            "head_switching_mid_line_position": 0.95,
+            "head_switching_mid_line_jitter": float(settings.get("head_switching_jitter", 0.03)),
+            "tracking_noise": False,
+            "tracking_noise_height": 12,
+            "tracking_noise_wave_intensity": 15,
+            "tracking_noise_snow_intensity": 0.025,
+            "tracking_noise_snow_anisotropy": 0.25,
+            "tracking_noise_noise_intensity": 0.25,
+            "ringing": bool(settings.get("vhs_ringing", True)),
+            "ringing_frequency": float(settings.get("vhs_ringing_freq", 0.45)),
+            "ringing_power": int(settings.get("vhs_ringing_power", 4)),
+            "ringing_scale": 4,
+            "luma_noise": bool(settings.get("vhs_luma_noise", True)),
+            "luma_noise_intensity": float(settings.get("vhs_luma_noise_intensity", 0.01)),
+            "luma_noise_frequency": 0.5,
+            "luma_noise_detail": 1,
+            "chroma_noise": bool(settings.get("vhs_chroma_noise", True)),
+            "chroma_noise_intensity": c_noise,
+            "chroma_noise_frequency": 0.05,
+            "chroma_noise_detail": 2,
+            "chroma_phase_error": 0,
+            "chroma_phase_noise_intensity": 0.001,
+            "chroma_delay_horizontal": 0,
+            "chroma_delay_vertical": 0,
+            "vhs_settings": True,
+            "vhs_tape_speed": speed_val,
+            "vhs_chroma_loss": c_loss,
+            "vhs_sharpen_enabled": bool(settings.get("vhs_sharpen_enabled", True)),
+            "vhs_sharpen": float(settings.get("vhs_sharpen", 0.25)),
+            "vhs_sharpen_frequency": float(settings.get("vhs_sharpen_freq", 1.0)),
+            "vhs_edge_wave_enabled": bool(settings.get("vhs_edge_wave_enabled", True)),
+            "vhs_edge_wave": float(settings.get("vhs_edge_wave", 0.5)),
+            "vhs_edge_wave_speed": float(settings.get("vhs_edge_wave_speed", 4.0)),
+            "vhs_edge_wave_frequency": 0.05,
+            "vhs_edge_wave_detail": 2,
+            "vhs_chroma_vert_blend": bool(settings.get("vhs_chroma_vert_blend", True)),
+            "chroma_lowpass_out": 2,
+            "scale_settings": True,
+            "bandwidth_scale": 1,
+            "vertical_scale": 1,
+            "scale_with_video_size": False,
+            "version": 1
+        }
+        return json.dumps(cfg)
+
     # ================= ZERO-LATENCY HIGH PRECISION PREVIEW =================
     def extract_preview_frames(self, timestamp_sec, settings):
         if self.active_index < 0 or self.active_index >= len(self.queue):
@@ -835,11 +935,30 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
                 subprocess.run(cmd_ai, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **WIN_FLAGS)
                 self.cached_ai_model = ai_model
 
-        # 3. FAST 20MS IN-MEMORY COLOR GRADING ON CACHED FRAME
+        # 3. BASE FRAME INPUT
         base_input = self.cached_ai_scaled_file if ("realesr" in ai_model and os.path.exists(self.cached_ai_scaled_file)) else self.cached_source_file
         if not os.path.exists(base_input):
             base_input = in_path
 
+        # 4. GENUINE NTSC-RS CLI DSP ENGINE (WHEN VHS MODE IS ACTIVE)
+        vhs_mode = settings.get("vhs_mode", False)
+        if vhs_mode and self.ntsc_cli_exe and os.path.exists(self.ntsc_cli_exe):
+            ntsc_out = os.path.join(self.cache_dir, f"cached_ntsc_{ts_str.replace(':','_')}.png")
+            ntsc_json = self.build_ntsc_settings_json(settings)
+            cmd_ntsc = [
+                self.ntsc_cli_exe,
+                "-i", base_input,
+                "-o", ntsc_out,
+                "-j", ntsc_json,
+                "-c", "png",
+                "--single-frame-time", "00:00.00",
+                "-y"
+            ]
+            res_ntsc = subprocess.run(cmd_ntsc, env=self.ntsc_env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **WIN_FLAGS)
+            if res_ntsc.returncode == 0 and os.path.exists(ntsc_out) and os.path.getsize(ntsc_out) > 1000:
+                base_input = ntsc_out
+
+        # 5. FAST COLOR GRADING ON CACHED FRAME
         filter_str, is_complex, target_w, target_h = self.build_filter_graph(item, settings, for_preview=True)
 
         cmd_a = ["ffmpeg", "-y", "-i", base_input]
@@ -1006,6 +1125,10 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
         filter_str, is_complex, _, _ = self.build_filter_graph(item, settings)
 
         def worker():
+            vhs_mode = settings.get("vhs_mode", False)
+            use_ntsc_cli = vhs_mode and self.ntsc_cli_exe and os.path.exists(self.ntsc_cli_exe)
+            target_out = os.path.join(temp_dir, f"apple_pre_ntsc_{int(time.time()*1000)}.mp4") if use_ntsc_cli else sample_out
+
             cmd = ["ffmpeg", "-y"]
             if not is_image: cmd += ["-ss", ts_str]
             cmd += ["-i", item["path"]]
@@ -1015,13 +1138,29 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
             else: cmd += ["-vf", filter_str]
 
             cmd += [
-                "-c:v", "hevc_nvenc", "-preset", "p1", "-cq", "20", "-pix_fmt", "yuv420p",
+                "-c:v", "h264_nvenc" if use_ntsc_cli else "hevc_nvenc",
+                "-preset", "p1", "-cq", "20", "-pix_fmt", "yuv420p",
                 "-c:a", "copy",
                 "-c:s", "copy",
-                sample_out
+                target_out
             ]
 
             subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **WIN_FLAGS)
+
+            if use_ntsc_cli and os.path.exists(target_out) and os.path.getsize(target_out) > 50000:
+                ntsc_json = self.build_ntsc_settings_json(settings)
+                cmd_ntsc = [
+                    self.ntsc_cli_exe,
+                    "-i", target_out,
+                    "-o", sample_out,
+                    "-j", ntsc_json,
+                    "-c", "h264",
+                    "--quality", "24",
+                    "-y"
+                ]
+                subprocess.run(cmd_ntsc, env=self.ntsc_env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **WIN_FLAGS)
+                try: os.remove(target_out)
+                except Exception: pass
             
             if os.path.exists(sample_out) and os.path.getsize(sample_out) > 50000:
                 if self.potplayer_exe and os.path.exists(self.potplayer_exe):
@@ -1302,107 +1441,137 @@ body {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  overflow: hidden;
   background: var(--bg-app);
   position: relative;
 }
 
 /* TOPBAR */
 .topbar {
-  height: 54px;
-  padding: 0 20px;
+  height: 52px;
+  padding: 0 14px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   border-bottom: 1px solid var(--border-subtle);
   background: var(--bg-surface);
   z-index: 10;
+  overflow: hidden;
+  min-width: 0;
+  gap: 8px;
 }
 .brand-group {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
+  min-width: 0;
+  flex-shrink: 1;
 }
 .brand-logo {
-  width: 28px;
-  height: 28px;
-  background: linear-gradient(135deg, #e11d48, #38bdf8);
-  border-radius: 8px;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 12px rgba(82, 70, 234, 0.35);
+  flex-shrink: 0;
 }
 .brand-title {
   font-weight: 700;
-  font-size: 14px;
+  font-size: 13px;
   letter-spacing: -0.2px;
   color: #ffffff;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .brand-badge {
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 700;
-  color: #c7d2fe;
-  background: rgba(82, 70, 234, 0.2);
-  border: 1px solid rgba(82, 70, 234, 0.4);
-  padding: 2px 8px;
+  color: #fda4af;
+  background: rgba(225, 29, 72, 0.2);
+  border: 1px solid rgba(225, 29, 72, 0.4);
+  padding: 2px 6px;
   border-radius: var(--radius-pill);
   text-transform: uppercase;
   letter-spacing: 0.6px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 /* FOLDER VIDEO NAVIGATION ARROWS */
 .folder-nav-group {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   background: var(--bg-panel);
   border: 1px solid var(--border-subtle);
-  padding: 3px 8px;
+  padding: 2px 6px;
   border-radius: var(--radius-pill);
-  margin-left: 10px;
+  margin-left: 4px;
+  min-width: 0;
+  flex-shrink: 1;
 }
 .btn-nav-arrow {
   background: transparent;
   border: none;
   color: var(--text-sub);
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  flex-shrink: 0;
   transition: all 0.15s ease;
 }
 .btn-nav-arrow:hover {
   background: var(--bg-input);
   color: #ffffff;
 }
-.lbl-nav-counter {
+.select-nav-media {
+  max-width: 140px;
+  min-width: 60px;
+  background: transparent;
+  border: none;
+  color: var(--text-main);
   font-size: 11px;
+  font-weight: 500;
+  outline: none;
+  cursor: pointer;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.lbl-nav-counter {
+  font-size: 10px;
   font-weight: 600;
   color: var(--text-main);
-  padding: 0 4px;
+  padding: 0 3px;
   font-family: var(--font-mono);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .topbar-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 5px;
+  flex-shrink: 0;
 }
 .btn-action {
   background: var(--bg-panel);
   border: 1px solid var(--border-subtle);
   color: var(--text-main);
-  padding: 6px 12px;
-  border-radius: var(--radius-md);
-  font-size: 12px;
+  padding: 5px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
   font-weight: 500;
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
+  white-space: nowrap;
   transition: all 0.2s var(--ease-fluid);
 }
 .btn-action:hover {
@@ -1887,6 +2056,10 @@ img:not([src]), img[src=""], img[src="#"] {
   flex-direction: column;
   height: 100%;
   overflow: hidden;
+  position: relative;
+  z-index: 50;
+  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.4);
+  flex-shrink: 0;
 }
 
 .studio-tabs {
@@ -1895,18 +2068,24 @@ img:not([src]), img[src=""], img[src="#"] {
   border-bottom: 1px solid var(--border-subtle);
   padding: 4px 6px 0;
   gap: 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.studio-tabs::-webkit-scrollbar {
+  display: none;
 }
 .studio-tab-btn {
-  flex: 1;
+  flex: 1 0 auto;
   background: transparent;
   border: none;
   color: var(--text-sub);
   font-size: 11px;
   font-weight: 600;
-  padding: 10px 2px 8px;
+  padding: 10px 6px 8px;
   cursor: pointer;
   text-align: center;
   border-bottom: 2px solid transparent;
+  white-space: nowrap;
   transition: all 0.2s ease;
 }
 .studio-tab-btn:hover { color: var(--text-main); }
@@ -2483,44 +2662,7 @@ img:not([src]), img[src=""], img[src="#"] {
       0 0 1 0 0
       0 0 0 1 0" />
   </filter>
-  <filter id="vhsChromaFilter" x="-10%" y="-10%" width="120%" height="120%">
-    <!-- Authentic NTSC VHS Composite Luma Peaking & Color-Under Smear -->
-    <!-- 1. Horizontal Luma Ringing Overshoot (Convolution Kernel [-k, 1+2k, -k]) -->
-    <feConvolveMatrix id="vhsLumaConvolve" order="3 1" kernelMatrix="-0.35 1.70 -0.35" preserveAlpha="true" in="SourceGraphic" result="luma_peaked"/>
-    
-    <!-- 2. NTSC Color-Under Chroma Separation & Horizontal Smear -->
-    <feColorMatrix type="matrix" values="
-      1 0 0 0 0
-      0 0 0 0 0
-      0 0 0 0 0
-      0 0 0 1 0" in="luma_peaked" result="red_chan"/>
-    <feOffset id="vhsRedOffset" dx="-2.8" dy="0" in="red_chan" result="red_shift"/>
-    <feGaussianBlur stdDeviation="3.2 0" in="red_shift" result="red_smear"/>
-
-    <feColorMatrix type="matrix" values="
-      0 0 0 0 0
-      0 1 0 0 0
-      0 0 0 0 0
-      0 0 0 1 0" in="luma_peaked" result="green_chan"/>
-
-    <feColorMatrix type="matrix" values="
-      0 0 0 0 0
-      0 0 0 0 0
-      0 0 1 0 0
-      0 0 0 1 0" in="luma_peaked" result="blue_chan"/>
-    <feOffset id="vhsBlueOffset" dx="2.8" dy="0" in="blue_chan" result="blue_shift"/>
-    <feGaussianBlur stdDeviation="3.6 0" in="blue_shift" result="blue_smear"/>
-
-    <feBlend mode="screen" in="red_smear" in2="green_chan" result="rg_blend"/>
-    <feBlend mode="screen" in="rg_blend" in2="blue_smear" result="vhs_rgb"/>
-
-    <!-- 3. NTSC Tape Warmth Transfer -->
-    <feComponentTransfer in="vhs_rgb">
-      <feFuncR type="linear" slope="1.05" intercept="0.01"/>
-      <feFuncG type="linear" slope="1.00" intercept="0.008"/>
-      <feFuncB type="linear" slope="0.94" intercept="0.015"/>
-    </feComponentTransfer>
-  </filter>
+  
 </svg>
 
 <div class="app-shell">
@@ -2556,41 +2698,41 @@ img:not([src]), img[src=""], img[src="#"] {
 
       <div class="topbar-actions">
         <!-- SUGGEST ENHANCEMENTS VISUAL AUDITION -->
-        <button class="btn-action suggest" onclick="openAuditionModal()" title="See 6 AI remaster treatments on this frame">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <button class="btn-action suggest" onclick="openAuditionModal()" title="AI Remaster Enhancements Audition">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"></path>
           </svg>
-          Suggest Enhancements
+          Suggest
         </button>
 
         <!-- 10-SECOND PREVIEW RENDER -->
-        <button class="btn-action" onclick="renderQuickSample(10)" title="Fast 10s test render with active color grade">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <button class="btn-action" onclick="renderQuickSample(10)" title="Fast 10s test render">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polygon points="5 3 19 12 5 21 5 3"></polygon>
           </svg>
-          10s Test Render
+          10s Test
         </button>
 
         <!-- WATCH IN POTPLAYER -->
-        <button class="btn-action" id="btnPotPlayer" onclick="watchInPotPlayer()" title="Watch color-graded sample in PotPlayer with dual-audio & subtitles">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <button class="btn-action" id="btnPotPlayer" onclick="watchInPotPlayer()" title="Watch in PotPlayer with dual-audio & subtitles">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
             <line x1="8" y1="21" x2="16" y2="21"></line>
             <line x1="12" y1="17" x2="12" y2="21"></line>
           </svg>
-          <span id="lblPotPlayerBtn">Watch Remastered</span>
+          <span id="lblPotPlayerBtn">Player</span>
         </button>
 
         <!-- UNDO & REDO -->
         <button class="btn-action" id="btnUndo" onclick="undo()" title="Undo last change (Ctrl+Z)" style="opacity: 0.45; pointer-events: none;">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="1 4 1 10 7 10"></polyline>
             <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
           </svg>
           Undo
         </button>
-        <button class="btn-action" id="btnRedo" onclick="redo()" title="Redo last change (Ctrl+Y / Ctrl+Shift+Z)" style="opacity: 0.45; pointer-events: none;">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <button class="btn-action" id="btnRedo" onclick="redo()" title="Redo last change (Ctrl+Y)" style="opacity: 0.45; pointer-events: none;">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="23 4 23 10 17 10"></polyline>
             <path d="M20.49 15a9 9 0 1 1-2.13-9.36L23 10"></path>
           </svg>
@@ -2598,8 +2740,8 @@ img:not([src]), img[src=""], img[src="#"] {
         </button>
 
         <!-- SAVE / LOAD PRESET -->
-        <button class="btn-action" onclick="saveCustomPreset()" title="Save current grading preset to file">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <button class="btn-action" onclick="saveCustomPreset()" title="Save grading preset to file">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
             <polyline points="17 21 17 13 7 13 7 21"></polyline>
             <polyline points="7 3 7 8 15 8"></polyline>
@@ -2607,7 +2749,7 @@ img:not([src]), img[src=""], img[src="#"] {
           Save
         </button>
         <button class="btn-action" onclick="loadCustomPreset()" title="Load grading preset from file">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
             <polyline points="7 10 12 15 17 10"></polyline>
             <line x1="12" y1="15" x2="12" y2="3"></line>
@@ -2641,7 +2783,7 @@ img:not([src]), img[src=""], img[src="#"] {
         <div class="layer-after-clip" id="afterClip">
           <img class="layer-after" id="imgAfter" style="display:none;" onload="this.style.display='block';" onerror="this.style.display='none';" />
           <!-- VHS HEAD-SWITCHING TRACKING BAND AT BOTTOM OF REMASTERED FRAME -->
-          <div class="vhs-tracking-band" id="vhsTrackingBand"></div>
+          
         </div>
 
         <!-- CRT OVERLAYS -->
@@ -2731,12 +2873,13 @@ img:not([src]), img[src=""], img[src="#"] {
     
     <!-- TABS -->
     <nav class="studio-tabs">
-      <button class="studio-tab-btn active" onclick="switchSidebarTab('tabColor', this)">Color & Wheels</button>
-      <button class="studio-tab-btn" onclick="switchSidebarTab('tabRetroCRT', this)">Retro CRT/VHS</button>
-      <button class="studio-tab-btn" onclick="switchSidebarTab('tabAIUpscale', this)">AI Upscaling</button>
+      <button class="studio-tab-btn active" onclick="switchSidebarTab('tabColor', this)">Color</button>
+      <button class="studio-tab-btn" onclick="switchSidebarTab('tabVHS', this)">VHS Studio</button>
+      <button class="studio-tab-btn" onclick="switchSidebarTab('tabRetroCRT', this)">Retro CRT</button>
+      <button class="studio-tab-btn" onclick="switchSidebarTab('tabAIUpscale', this)">AI Upscale</button>
       <button class="studio-tab-btn" onclick="switchSidebarTab('tabRestoration', this)">Cel Polish</button>
       <button class="studio-tab-btn" onclick="switchSidebarTab('tabGeometry', this)">Geometry</button>
-      <button class="studio-tab-btn" onclick="switchSidebarTab('tabBatch', this)">Batch Queue</button>
+      <button class="studio-tab-btn" onclick="switchSidebarTab('tabBatch', this)">Batch</button>
       <button class="studio-tab-btn" onclick="switchSidebarTab('tabExport', this)">Export</button>
     </nav>
 
@@ -2953,6 +3096,272 @@ img:not([src]), img[src=""], img[src="#"] {
     </div>
 
     <!-- TAB 2: RETRO CRT & VHS SIMULATION (NEW FEATURE) -->
+        <!-- TAB 2: VHS STUDIO (AUTHENTIC NTSC-RS DSP ENGINE) -->
+    <div class="studio-scroll" id="tabVHS" style="display:none;">
+      
+      <!-- VHS TAPE EMULATION -->
+      <div class="studio-card">
+        <div class="card-head">
+          <span class="card-title">VHS Tape Emulation</span>
+          <span style="font-size: 10px; color: var(--accent-rose); font-weight: 700;">NTSC PHYSICAL DSP</span>
+        </div>
+        <div style="font-size: 11px; color: var(--text-sub); line-height: 1.4;">
+          Authentic physical analog tape DSP simulation via NTSC-RS: subcarrier demodulation, color-under chroma loss, and helical head tracking.
+        </div>
+
+        <div class="toggle-row">
+          <div class="toggle-label-wrap">
+            <div class="toggle-title">VHS Tape Simulation Mode</div>
+            <div class="toggle-desc">Master enable for physical analog tape pipeline</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="chkVhsMaster" onchange="onToggleVHSMode(this.checked)">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="control-row">
+          <span class="ctrl-label">Tape Speed Format</span>
+          <select class="select-field" id="selVhsSpeed" onchange="onVhsSpeedChange(this.value)">
+            <option value="sp">SP (Standard Play - 2 hr)</option>
+            <option value="lp" selected>LP (Long Play - 4 hr)</option>
+            <option value="ep">EP (Extended Play - 6 hr)</option>
+          </select>
+        </div>
+
+        <div class="slider-row">
+          <div class="slider-meta">
+            <span>Chroma Loss</span>
+            <span class="slider-val" id="valVhsChromaLoss">0.0025%</span>
+          </div>
+          <input type="range" class="slider-bar" id="slVhsChromaLoss" min="0.0000" max="0.0100" step="0.0005" value="0.0025"
+                 oninput="onVhsChromaLossChange(this.value)">
+        </div>
+
+        <div class="toggle-row">
+          <div class="toggle-label-wrap">
+            <div class="toggle-title">Vertically Blend Chroma</div>
+            <div class="toggle-desc">Simulate color comb filter crosstalk blending</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="chkVhsVertBlend" checked onchange="onToggleVhsVertBlend(this.checked)">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <!-- SHARPENING / LUMA PEAKING -->
+      <div class="studio-card">
+        <div class="card-head">
+          <span class="card-title">Sharpening (Luma Peaking)</span>
+          <span style="font-size: 10px; color: var(--accent-cyan); font-weight: 700;">ANALOG PEAKING</span>
+        </div>
+        <div class="toggle-row">
+          <div class="toggle-label-wrap">
+            <div class="toggle-title">Luma Edge Peaking</div>
+            <div class="toggle-desc">High-frequency analog video sharpening circuit</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="chkVhsSharpen" checked onchange="onToggleVhsSharpen(this.checked)">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="slider-row">
+          <div class="slider-meta">
+            <span>Sharpen Intensity</span>
+            <span class="slider-val" id="valVhsSharpen">0.25</span>
+          </div>
+          <input type="range" class="slider-bar" id="slVhsSharpen" min="0.00" max="1.00" step="0.05" value="0.25"
+                 oninput="onVhsSharpenChange(this.value)">
+        </div>
+
+        <div class="slider-row">
+          <div class="slider-meta">
+            <span>Peaking Frequency</span>
+            <span class="slider-val" id="valVhsSharpenFreq">1.00</span>
+          </div>
+          <input type="range" class="slider-bar" id="slVhsSharpenFreq" min="0.20" max="2.00" step="0.10" value="1.00"
+                 oninput="onVhsSharpenFreqChange(this.value)">
+        </div>
+      </div>
+
+      <!-- HEAD SWITCHING & TRACKING -->
+      <div class="studio-card">
+        <div class="card-head">
+          <span class="card-title">Helical Head Switching & Tracking</span>
+          <span style="font-size: 10px; color: var(--accent-amber); font-weight: 700;">ROTARY DRUM</span>
+        </div>
+        <div style="font-size: 11px; color: var(--text-sub); line-height: 1.4;">
+          Distortion occurring at the bottom of the active frame as the spinning helical video head drum changes heads during vertical retrace.
+        </div>
+
+        <div class="toggle-row">
+          <div class="toggle-label-wrap">
+            <div class="toggle-title">Head Switching Effect</div>
+            <div class="toggle-desc">Authentic bottom drum retrace band distortion</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="chkHeadSwitching" checked onchange="onToggleHeadSwitching(this.checked)">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="slider-row">
+          <div class="slider-meta">
+            <span>Height (Scanlines)</span>
+            <span class="slider-val" id="valHeadHeight">8 lines</span>
+          </div>
+          <input type="range" class="slider-bar" id="slHeadHeight" min="2" max="24" step="1" value="8"
+                 oninput="onHeadHeightChange(this.value)">
+        </div>
+
+        <div class="slider-row">
+          <div class="slider-meta">
+            <span>Horizontal Shift</span>
+            <span class="slider-val" id="valHeadShift">72 px</span>
+          </div>
+          <input type="range" class="slider-bar" id="slHeadShift" min="10" max="120" step="2" value="72"
+                 oninput="onHeadShiftChange(this.value)">
+        </div>
+
+        <div class="slider-row">
+          <div class="slider-meta">
+            <span>Mid-Line Jitter</span>
+            <span class="slider-val" id="valHeadJitter">0.03</span>
+          </div>
+          <input type="range" class="slider-bar" id="slHeadJitter" min="0.00" max="0.10" step="0.01" value="0.03"
+                 oninput="onHeadJitterChange(this.value)">
+        </div>
+      </div>
+
+      <!-- EDGE WAVE (WOW & FLUTTER) -->
+      <div class="studio-card">
+        <div class="card-head">
+          <span class="card-title">Tape Edge Wave (Wow & Flutter)</span>
+          <span style="font-size: 10px; color: var(--accent-ruby); font-weight: 700;">CAPSTAN TRANSPORT</span>
+        </div>
+        <div style="font-size: 11px; color: var(--text-sub); line-height: 1.4;">
+          Horizontal phase rippling and tape tension flutter caused by capstan pinch-roller micro-slippage.
+        </div>
+
+        <div class="toggle-row">
+          <div class="toggle-label-wrap">
+            <div class="toggle-title">Edge Wave Flutter</div>
+            <div class="toggle-desc">Capstan transport mechanical flutter</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="chkVhsEdgeWave" checked onchange="onToggleVhsEdgeWave(this.checked)">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="slider-row">
+          <div class="slider-meta">
+            <span>Wave Intensity</span>
+            <span class="slider-val" id="valVhsEdgeWave">0.50</span>
+          </div>
+          <input type="range" class="slider-bar" id="slVhsEdgeWave" min="0.0" max="2.0" step="0.1" value="0.5"
+                 oninput="onVhsEdgeWaveChange(this.value)">
+        </div>
+
+        <div class="slider-row">
+          <div class="slider-meta">
+            <span>Flutter Speed</span>
+            <span class="slider-val" id="valVhsEdgeWaveSpeed">4.00</span>
+          </div>
+          <input type="range" class="slider-bar" id="slVhsEdgeWaveSpeed" min="0.5" max="10.0" step="0.5" value="4.0"
+                 oninput="onVhsEdgeWaveSpeedChange(this.value)">
+        </div>
+      </div>
+
+      <!-- RINGING & OVERSHOOT -->
+      <div class="studio-card">
+        <div class="card-head">
+          <span class="card-title">Composite Luma Ringing</span>
+          <span style="font-size: 10px; color: var(--accent-emerald); font-weight: 700;">DEMODULATOR</span>
+        </div>
+        <div class="toggle-row">
+          <div class="toggle-label-wrap">
+            <div class="toggle-title">Ringing Overshoot</div>
+            <div class="toggle-desc">Analog filter impulse response ringing on sharp transitions</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="chkVhsRinging" checked onchange="onToggleVhsRinging(this.checked)">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="slider-row">
+          <div class="slider-meta">
+            <span>Ringing Frequency</span>
+            <span class="slider-val" id="valVhsRingingFreq">0.45</span>
+          </div>
+          <input type="range" class="slider-bar" id="slVhsRingingFreq" min="0.10" max="0.80" step="0.05" value="0.45"
+                 oninput="onVhsRingingFreqChange(this.value)">
+        </div>
+
+        <div class="slider-row">
+          <div class="slider-meta">
+            <span>Ringing Power</span>
+            <span class="slider-val" id="valVhsRingingPower">4</span>
+          </div>
+          <input type="range" class="slider-bar" id="slVhsRingingPower" min="1" max="8" step="1" value="4"
+                 oninput="onVhsRingingPowerChange(this.value)">
+        </div>
+      </div>
+
+      <!-- ANALOG NOISE -->
+      <div class="studio-card">
+        <div class="card-head">
+          <span class="card-title">Analog Noise & Grain</span>
+          <span style="font-size: 10px; color: var(--accent-sub); font-weight: 700;">RF MODULATOR</span>
+        </div>
+
+        <div class="toggle-row">
+          <div class="toggle-label-wrap">
+            <div class="toggle-title">Chroma Noise</div>
+            <div class="toggle-desc">Color subcarrier RF phase noise</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="chkVhsChromaNoise" checked onchange="onToggleVhsChromaNoise(this.checked)">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="slider-row">
+          <div class="slider-meta">
+            <span>Chroma Noise Intensity</span>
+            <span class="slider-val" id="valVhsChromaNoise">10%</span>
+          </div>
+          <input type="range" class="slider-bar" id="slVhsChromaNoise" min="0" max="50" step="2" value="10"
+                 oninput="onVhsChromaNoiseChange(this.value)">
+        </div>
+
+        <div class="toggle-row">
+          <div class="toggle-label-wrap">
+            <div class="toggle-title">Composite Noise</div>
+            <div class="toggle-desc">Broadband composite baseband thermal noise</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="chkVhsCompNoise" checked onchange="onToggleVhsCompNoise(this.checked)">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="slider-row">
+          <div class="slider-meta">
+            <span>Composite Noise Intensity</span>
+            <span class="slider-val" id="valVhsCompNoise">5%</span>
+          </div>
+          <input type="range" class="slider-bar" id="slVhsCompNoise" min="0" max="20" step="1" value="5"
+                 oninput="onVhsCompNoiseChange(this.value)">
+        </div>
+      </div>
+
+    </div>
+
+    <!-- TAB 3: RETRO CRT (MONITOR & AUDIO HARDWARE) -->
     <div class="studio-scroll" id="tabRetroCRT" style="display:none;">
       
       <div class="studio-card">
@@ -2997,67 +3406,6 @@ img:not([src]), img[src=""], img[src="#"] {
       </div>
 
       <div class="studio-card">
-        <div class="card-head">
-          <span class="card-title">NTSC VHS Tape Simulation</span>
-          <span style="font-size: 10px; color: var(--accent-rose); font-weight: 700;">NTSC-RS INSPIRED</span>
-        </div>
-        <div style="font-size: 11px; color: var(--text-sub); line-height: 1.4;">
-          Authentic NTSC tape simulation: composite luma ringing overshoot, color-under horizontal chroma smear, and helical head-switching tracking distortion.
-        </div>
-
-        <div class="toggle-row">
-          <div class="toggle-label-wrap">
-            <div class="toggle-title">VHS Tape Analog Mode</div>
-            <div class="toggle-desc">Composite demodulation & analog tape tracking</div>
-          </div>
-          <label class="toggle-switch">
-            <input type="checkbox" id="chkVhsMode" onchange="onToggleVHSMode(this.checked)">
-            <span class="toggle-slider"></span>
-          </label>
-        </div>
-
-        <div class="slider-row">
-          <div class="slider-meta">
-            <span>NTSC Luma Ringing & Peaking</span>
-            <span class="slider-val" id="valVhsRinging">35%</span>
-          </div>
-          <input type="range" class="slider-bar" id="slVhsRinging" min="0.10" max="0.75" step="0.05" value="0.35"
-                 oninput="onVhsRingingChange(this.value)">
-        </div>
-
-        <div class="slider-row">
-          <div class="slider-meta">
-            <span>Chroma Smear & Horizontal Delay</span>
-            <span class="slider-val" id="valVhsChroma">2.8 px</span>
-          </div>
-          <input type="range" class="slider-bar" id="slVhsChroma" min="1.0" max="6.0" step="0.5" value="2.8"
-                 oninput="onVhsChromaChange(this.value)">
-        </div>
-
-        <div class="toggle-row">
-          <div class="toggle-label-wrap">
-            <div class="toggle-title">Head-Switching Tracking Distortion</div>
-            <div class="toggle-desc">Bottom helical scanhead sync jitter & static burst band</div>
-          </div>
-          <label class="toggle-switch">
-            <input type="checkbox" id="chkVhsTracking" checked onchange="onToggleVhsTracking(this.checked)">
-            <span class="toggle-slider"></span>
-          </label>
-        </div>
-
-        <div class="toggle-row">
-          <div class="toggle-label-wrap">
-            <div class="toggle-title">Tape Edge Wave (Wow & Flutter)</div>
-            <div class="toggle-desc">Analog capstan transport micro-flutter ripples</div>
-          </div>
-          <label class="toggle-switch">
-            <input type="checkbox" id="chkVhsEdgeWave" checked onchange="onToggleVhsEdgeWave(this.checked)">
-            <span class="toggle-slider"></span>
-          </label>
-        </div>
-      </div>
-
-      <div class="studio-card">
         <div class="card-title">Retro Audio Dialogue Presence</div>
         <div class="toggle-row">
           <div class="toggle-label-wrap">
@@ -3073,8 +3421,7 @@ img:not([src]), img[src=""], img[src="#"] {
 
     </div>
 
-    <!-- TAB 3: AI UPSCALING (REAL-ESRGAN & A/B COMPARE) -->
-    <div class="studio-scroll" id="tabAIUpscale" style="display:none;">
+<div class="studio-scroll" id="tabAIUpscale" style="display:none;">
       
       <div class="studio-card">
         <div class="card-head">
@@ -3425,10 +3772,26 @@ let state = {
     crt_intensity: 0.35,
     crt_curve: false,
     vhs_mode: false,
-    vhs_chroma: 2.8,
-    vhs_ringing: 0.35,
-    vhs_tracking: true,
-    vhs_edge_wave: true,
+    vhs_tape_speed: "lp",
+    vhs_chroma_loss: 0.0025,
+    vhs_chroma_vert_blend: true,
+    vhs_sharpen_enabled: true,
+    vhs_sharpen: 0.25,
+    vhs_sharpen_freq: 1.0,
+    head_switching: true,
+    head_switching_height: 8,
+    head_switching_shift: 72,
+    head_switching_jitter: 0.03,
+    vhs_edge_wave_enabled: true,
+    vhs_edge_wave: 0.5,
+    vhs_edge_wave_speed: 4.0,
+    vhs_ringing: true,
+    vhs_ringing_freq: 0.45,
+    vhs_ringing_power: 4,
+    vhs_chroma_noise: true,
+    vhs_chroma_noise_intensity: 0.10,
+    vhs_composite_noise: true,
+    vhs_composite_noise_intensity: 0.05,
     line_darken: 0.0,
     cel_deflicker: false,
     audio_eq: false
@@ -3658,40 +4021,70 @@ function syncAllInputsFromSettings() {
     }
   }
 
-  // NTSC VHS Mode & Sliders
-  if (document.getElementById('chkVhsMode')) {
-    document.getElementById('chkVhsMode').checked = !!s.vhs_mode;
-    const band = document.getElementById('vhsTrackingBand');
-    if (band) {
-      const trackingOn = s.vhs_tracking !== false;
-      band.style.display = (s.vhs_mode && trackingOn) ? 'block' : 'none';
-    }
-    const imgAfter = document.getElementById('imgAfter');
-    if (imgAfter) {
-      if (s.vhs_mode) {
-        imgAfter.classList.add('vhs-jitter');
-        if (s.vhs_edge_wave !== false) imgAfter.classList.add('vhs-edge-wave');
-      } else {
-        imgAfter.classList.remove('vhs-jitter');
-        imgAfter.classList.remove('vhs-edge-wave');
-      }
-    }
-    const clip = document.getElementById('afterClip');
-    if (clip) {
-      if (s.vhs_mode) clip.style.filter = 'url(#vhsChromaFilter)';
-      else clip.style.filter = 'none';
-    }
+  // Dedicated VHS Studio Controls (Authentic NTSC-RS DSP)
+  if (document.getElementById('chkVhsMaster')) {
+    document.getElementById('chkVhsMaster').checked = !!s.vhs_mode;
   }
-  setVal('slVhsRinging', s.vhs_ringing !== undefined ? s.vhs_ringing : 0.35);
-  setText('valVhsRinging', `${Math.round((s.vhs_ringing !== undefined ? s.vhs_ringing : 0.35) * 100)}%`);
-  setVal('slVhsChroma', s.vhs_chroma !== undefined ? s.vhs_chroma : 2.8);
-  setText('valVhsChroma', `${(s.vhs_chroma !== undefined ? s.vhs_chroma : 2.8).toFixed(1)} px`);
-  if (document.getElementById('chkVhsTracking')) {
-    document.getElementById('chkVhsTracking').checked = s.vhs_tracking !== false;
+  setVal('selVhsSpeed', s.vhs_tape_speed || 'lp');
+  let cLoss = s.vhs_chroma_loss !== undefined ? s.vhs_chroma_loss : 0.0025;
+  setVal('slVhsChromaLoss', cLoss);
+  setText('valVhsChromaLoss', `${cLoss.toFixed(4)}%`);
+  if (document.getElementById('chkVhsVertBlend')) {
+    document.getElementById('chkVhsVertBlend').checked = s.vhs_chroma_vert_blend !== false;
   }
+
+  // Sharpening
+  if (document.getElementById('chkVhsSharpen')) {
+    document.getElementById('chkVhsSharpen').checked = s.vhs_sharpen_enabled !== false;
+  }
+  setVal('slVhsSharpen', s.vhs_sharpen !== undefined ? s.vhs_sharpen : 0.25);
+  setText('valVhsSharpen', (s.vhs_sharpen !== undefined ? s.vhs_sharpen : 0.25).toFixed(2));
+  setVal('slVhsSharpenFreq', s.vhs_sharpen_freq !== undefined ? s.vhs_sharpen_freq : 1.0);
+  setText('valVhsSharpenFreq', (s.vhs_sharpen_freq !== undefined ? s.vhs_sharpen_freq : 1.0).toFixed(2));
+
+  // Head Switching & Tracking
+  if (document.getElementById('chkHeadSwitching')) {
+    document.getElementById('chkHeadSwitching').checked = s.head_switching !== false;
+  }
+  setVal('slHeadHeight', s.head_switching_height !== undefined ? s.head_switching_height : 8);
+  setText('valHeadHeight', `${s.head_switching_height !== undefined ? s.head_switching_height : 8} lines`);
+  setVal('slHeadShift', s.head_switching_shift !== undefined ? s.head_switching_shift : 72);
+  setText('valHeadShift', `${s.head_switching_shift !== undefined ? s.head_switching_shift : 72} px`);
+  setVal('slHeadJitter', s.head_switching_jitter !== undefined ? s.head_switching_jitter : 0.03);
+  setText('valHeadJitter', (s.head_switching_jitter !== undefined ? s.head_switching_jitter : 0.03).toFixed(2));
+
+  // Edge Wave
   if (document.getElementById('chkVhsEdgeWave')) {
-    document.getElementById('chkVhsEdgeWave').checked = s.vhs_edge_wave !== false;
+    document.getElementById('chkVhsEdgeWave').checked = s.vhs_edge_wave_enabled !== false;
   }
+  setVal('slVhsEdgeWave', s.vhs_edge_wave !== undefined ? s.vhs_edge_wave : 0.5);
+  setText('valVhsEdgeWave', (s.vhs_edge_wave !== undefined ? s.vhs_edge_wave : 0.5).toFixed(2));
+  setVal('slVhsEdgeWaveSpeed', s.vhs_edge_wave_speed !== undefined ? s.vhs_edge_wave_speed : 4.0);
+  setText('valVhsEdgeWaveSpeed', (s.vhs_edge_wave_speed !== undefined ? s.vhs_edge_wave_speed : 4.0).toFixed(2));
+
+  // Ringing
+  if (document.getElementById('chkVhsRinging')) {
+    document.getElementById('chkVhsRinging').checked = s.vhs_ringing !== false;
+  }
+  setVal('slVhsRingingFreq', s.vhs_ringing_freq !== undefined ? s.vhs_ringing_freq : 0.45);
+  setText('valVhsRingingFreq', (s.vhs_ringing_freq !== undefined ? s.vhs_ringing_freq : 0.45).toFixed(2));
+  setVal('slVhsRingingPower', s.vhs_ringing_power !== undefined ? s.vhs_ringing_power : 4);
+  setText('valVhsRingingPower', (s.vhs_ringing_power !== undefined ? s.vhs_ringing_power : 4));
+
+  // Noise
+  if (document.getElementById('chkVhsChromaNoise')) {
+    document.getElementById('chkVhsChromaNoise').checked = s.vhs_chroma_noise !== false;
+  }
+  let cNoisePct = Math.round((s.vhs_chroma_noise_intensity !== undefined ? s.vhs_chroma_noise_intensity : 0.10) * 100);
+  setVal('slVhsChromaNoise', cNoisePct);
+  setText('valVhsChromaNoise', `${cNoisePct}%`);
+
+  if (document.getElementById('chkVhsCompNoise')) {
+    document.getElementById('chkVhsCompNoise').checked = s.vhs_composite_noise !== false;
+  }
+  let compNoisePct = Math.round((s.vhs_composite_noise_intensity !== undefined ? s.vhs_composite_noise_intensity : 0.05) * 100);
+  setVal('slVhsCompNoise', compNoisePct);
+  setText('valVhsCompNoise', `${compNoisePct}%`);
 
   // Checkboxes
   if (document.getElementById('chkCelDeflicker')) {
@@ -3893,10 +4286,6 @@ function updateLiveGPUGrade() {
   }
 
   let filterStr = `contrast(${contPct}%) saturate(${satPct}%) brightness(${brightPct}%) url(#liveGrade)`;
-  if (s.vhs_mode) {
-    updateVHSFilter();
-    filterStr += ` url(#vhsChromaFilter)`;
-  }
   imgAfter.style.filter = filterStr;
 }
 
@@ -3931,83 +4320,159 @@ function onToggleCRTCurve(checked) {
   showToast(checked ? "Curved glass tube monitor enabled" : "Flat canvas enabled");
 }
 
+// =========================================================================
+// AUTHENTIC NTSC-RS VHS STUDIO ENGINE CONTROLS
+// =========================================================================
 function onToggleVHSMode(checked) {
-  pushHistory(checked ? "Enable NTSC VHS Simulation" : "Disable VHS Mode");
+  pushHistory(checked ? "Enable Physical NTSC VHS DSP" : "Disable VHS Mode");
   state.settings.vhs_mode = checked;
-  const imgAfter = document.getElementById('imgAfter');
-  const clip = document.getElementById('afterClip');
-  const band = document.getElementById('vhsTrackingBand');
-  
-  if (band) {
-    const trackingOn = state.settings.vhs_tracking !== false;
-    band.style.display = (checked && trackingOn) ? 'block' : 'none';
-  }
-  if (imgAfter) {
-    if (checked) {
-      imgAfter.classList.add('vhs-jitter');
-      if (state.settings.vhs_edge_wave !== false) imgAfter.classList.add('vhs-edge-wave');
-    } else {
-      imgAfter.classList.remove('vhs-jitter');
-      imgAfter.classList.remove('vhs-edge-wave');
-    }
-  }
-  if (clip) {
-    if (checked) clip.style.filter = 'url(#vhsChromaFilter)';
-    else clip.style.filter = 'none';
-  }
-  updateVHSFilter();
-  updateLiveGPUGrade();
-  showToast(checked ? "NTSC VHS Analog Tape Mode active" : "VHS Mode disabled");
+  showToast(checked ? "Authentic NTSC VHS Tape DSP active" : "VHS Tape Mode disabled");
+  refreshFrame();
 }
 
-function onVhsRingingChange(val) {
-  val = parseFloat(val);
-  state.settings.vhs_ringing = val;
-  const lbl = document.getElementById('valVhsRinging');
-  if (lbl) lbl.innerText = `${Math.round(val * 100)}%`;
-  updateVHSFilter();
+function onVhsSpeedChange(val) {
+  pushHistory(`VHS Speed: ${val.toUpperCase()}`);
+  state.settings.vhs_tape_speed = val;
+  showToast(`VHS Tape Speed: ${val.toUpperCase()}`);
+  refreshFrame();
 }
 
-function onVhsChromaChange(val) {
-  val = parseFloat(val);
-  state.settings.vhs_chroma = val;
-  const lbl = document.getElementById('valVhsChroma');
-  if (lbl) lbl.innerText = `${val.toFixed(1)} px`;
-  updateVHSFilter();
+function onVhsChromaLossChange(val) {
+  let v = parseFloat(val);
+  state.settings.vhs_chroma_loss = v;
+  const lbl = document.getElementById('valVhsChromaLoss');
+  if (lbl) lbl.innerText = `${v.toFixed(4)}%`;
+  refreshFrame();
 }
 
-function onToggleVhsTracking(checked) {
-  pushHistory(checked ? "Enable Head-Switching Band" : "Disable Head-Switching Band");
-  state.settings.vhs_tracking = checked;
-  const band = document.getElementById('vhsTrackingBand');
-  if (band) band.style.display = (state.settings.vhs_mode && checked) ? 'block' : 'none';
+function onToggleVhsVertBlend(checked) {
+  pushHistory(checked ? "Enable Chroma Vertical Blend" : "Disable Chroma Vertical Blend");
+  state.settings.vhs_chroma_vert_blend = checked;
+  refreshFrame();
+}
+
+function onToggleVhsSharpen(checked) {
+  pushHistory(checked ? "Enable Luma Peaking Sharpen" : "Disable Sharpening");
+  state.settings.vhs_sharpen_enabled = checked;
+  refreshFrame();
+}
+
+function onVhsSharpenChange(val) {
+  let v = parseFloat(val);
+  state.settings.vhs_sharpen = v;
+  const lbl = document.getElementById('valVhsSharpen');
+  if (lbl) lbl.innerText = v.toFixed(2);
+  refreshFrame();
+}
+
+function onVhsSharpenFreqChange(val) {
+  let v = parseFloat(val);
+  state.settings.vhs_sharpen_freq = v;
+  const lbl = document.getElementById('valVhsSharpenFreq');
+  if (lbl) lbl.innerText = v.toFixed(2);
+  refreshFrame();
+}
+
+function onToggleHeadSwitching(checked) {
+  pushHistory(checked ? "Enable Head-Switching Tracking" : "Disable Head-Switching");
+  state.settings.head_switching = checked;
+  refreshFrame();
+}
+
+function onHeadHeightChange(val) {
+  let v = parseInt(val);
+  state.settings.head_switching_height = v;
+  const lbl = document.getElementById('valHeadHeight');
+  if (lbl) lbl.innerText = `${v} lines`;
+  refreshFrame();
+}
+
+function onHeadShiftChange(val) {
+  let v = parseInt(val);
+  state.settings.head_switching_shift = v;
+  const lbl = document.getElementById('valHeadShift');
+  if (lbl) lbl.innerText = `${v} px`;
+  refreshFrame();
+}
+
+function onHeadJitterChange(val) {
+  let v = parseFloat(val);
+  state.settings.head_switching_jitter = v;
+  const lbl = document.getElementById('valHeadJitter');
+  if (lbl) lbl.innerText = v.toFixed(2);
+  refreshFrame();
 }
 
 function onToggleVhsEdgeWave(checked) {
-  pushHistory(checked ? "Enable Tape Edge Wave" : "Disable Tape Edge Wave");
-  state.settings.vhs_edge_wave = checked;
-  const imgAfter = document.getElementById('imgAfter');
-  if (imgAfter) {
-    if (state.settings.vhs_mode && checked) imgAfter.classList.add('vhs-edge-wave');
-    else imgAfter.classList.remove('vhs-edge-wave');
-  }
+  pushHistory(checked ? "Enable Tape Edge Wave" : "Disable Edge Wave");
+  state.settings.vhs_edge_wave_enabled = checked;
+  refreshFrame();
 }
 
-function updateVHSFilter(ringingVal, chromaVal) {
-  let rStrength = ringingVal !== undefined ? parseFloat(ringingVal) : (state.settings.vhs_ringing !== undefined ? state.settings.vhs_ringing : 0.35);
-  let cOffset = chromaVal !== undefined ? parseFloat(chromaVal) : (state.settings.vhs_chroma !== undefined ? state.settings.vhs_chroma : 2.8);
+function onVhsEdgeWaveChange(val) {
+  let v = parseFloat(val);
+  state.settings.vhs_edge_wave = v;
+  const lbl = document.getElementById('valVhsEdgeWave');
+  if (lbl) lbl.innerText = v.toFixed(2);
+  refreshFrame();
+}
 
-  const convolve = document.getElementById('vhsLumaConvolve');
-  if (convolve) {
-    let k = rStrength;
-    let center = (1.0 + 2.0 * k).toFixed(2);
-    let neg = (-k).toFixed(2);
-    convolve.setAttribute('kernelMatrix', `${neg} ${center} ${neg}`);
-  }
-  const rOff = document.getElementById('vhsRedOffset');
-  const bOff = document.getElementById('vhsBlueOffset');
-  if (rOff) rOff.setAttribute('dx', (-cOffset).toFixed(1));
-  if (bOff) bOff.setAttribute('dx', cOffset.toFixed(1));
+function onVhsEdgeWaveSpeedChange(val) {
+  let v = parseFloat(val);
+  state.settings.vhs_edge_wave_speed = v;
+  const lbl = document.getElementById('valVhsEdgeWaveSpeed');
+  if (lbl) lbl.innerText = v.toFixed(2);
+  refreshFrame();
+}
+
+function onToggleVhsRinging(checked) {
+  pushHistory(checked ? "Enable Luma Ringing" : "Disable Ringing");
+  state.settings.vhs_ringing = checked;
+  refreshFrame();
+}
+
+function onVhsRingingFreqChange(val) {
+  let v = parseFloat(val);
+  state.settings.vhs_ringing_freq = v;
+  const lbl = document.getElementById('valVhsRingingFreq');
+  if (lbl) lbl.innerText = v.toFixed(2);
+  refreshFrame();
+}
+
+function onVhsRingingPowerChange(val) {
+  let v = parseInt(val);
+  state.settings.vhs_ringing_power = v;
+  const lbl = document.getElementById('valVhsRingingPower');
+  if (lbl) lbl.innerText = v;
+  refreshFrame();
+}
+
+function onToggleVhsChromaNoise(checked) {
+  pushHistory(checked ? "Enable Chroma Noise" : "Disable Chroma Noise");
+  state.settings.vhs_chroma_noise = checked;
+  refreshFrame();
+}
+
+function onVhsChromaNoiseChange(val) {
+  let v = parseInt(val);
+  state.settings.vhs_chroma_noise_intensity = v / 100.0;
+  const lbl = document.getElementById('valVhsChromaNoise');
+  if (lbl) lbl.innerText = `${v}%`;
+  refreshFrame();
+}
+
+function onToggleVhsCompNoise(checked) {
+  pushHistory(checked ? "Enable Composite Noise" : "Disable Composite Noise");
+  state.settings.vhs_composite_noise = checked;
+  refreshFrame();
+}
+
+function onVhsCompNoiseChange(val) {
+  let v = parseInt(val);
+  state.settings.vhs_composite_noise_intensity = v / 100.0;
+  const lbl = document.getElementById('valVhsCompNoise');
+  if (lbl) lbl.innerText = `${v}%`;
+  refreshFrame();
 }
 
 function onToggleAudioEQ(checked) {
@@ -4640,7 +5105,13 @@ function resetSlidersToDefault() {
     contrast: 1.140, brightness: -0.018, gamma: 0.880, saturation: 1.260, sharpness: 0.800,
     exposure: 0.0, temp: 0, tint: 0, denoise: 3.0, grain: 0.0, deband: true, edge_clean: true,
     deinterlace: false, lut_mode: "none", lut_intensity: 1.0, crt_scanlines: false, vhs_mode: false,
-    crt_curve: false, vhs_chroma: 2.8, vhs_ringing: 0.35, vhs_tracking: true, vhs_edge_wave: true,
+    crt_curve: false, vhs_tape_speed: "lp", vhs_chroma_loss: 0.0025, vhs_chroma_vert_blend: true,
+    vhs_sharpen_enabled: true, vhs_sharpen: 0.25, vhs_sharpen_freq: 1.0,
+    head_switching: true, head_switching_height: 8, head_switching_shift: 72, head_switching_jitter: 0.03,
+    vhs_edge_wave_enabled: true, vhs_edge_wave: 0.5, vhs_edge_wave_speed: 4.0,
+    vhs_ringing: true, vhs_ringing_freq: 0.45, vhs_ringing_power: 4,
+    vhs_chroma_noise: true, vhs_chroma_noise_intensity: 0.10,
+    vhs_composite_noise: true, vhs_composite_noise_intensity: 0.05,
     line_darken: 0.0, cel_deflicker: false, audio_eq: false,
     lift_r: 0.0, lift_g: 0.0, lift_b: 0.0, lift_master: 0.0,
     gamma_r: 0.0, gamma_g: 0.0, gamma_b: 0.0, gamma_master: 0.0,
