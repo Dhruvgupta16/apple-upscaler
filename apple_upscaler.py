@@ -672,17 +672,19 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
             orig_w = item.get("width", w)
 
             if orig_h <= 576:
-                problems.append(f"Standard Definition ({orig_w}x{orig_h}) with telecine softness & analog compression ringing")
-                enhancements.append("Real-ESRGAN 4x deep cel reconstruction + 0.35 cel ink outline infill + AMD CAS 0.85 definition")
+                problems.append(f"Standard Definition ({orig_w}x{orig_h}) with telecine softness & compression ringing")
+                enhancements.append("Real-ESRGAN 4x deep cel reconstruction + AMD CAS 0.70 edge clarity + ink outline infill")
                 calc_settings["ai_model"] = "realesrgan-x4plus-anime"
                 calc_settings["resolution"] = "1080p"
-                calc_settings["sharpness"] = 0.85
-                calc_settings["line_darken"] = 0.35
-                calc_settings["denoise"] = 2.5
+                calc_settings["sharpness"] = 0.70
+                calc_settings["line_darken"] = 0.25
+                calc_settings["denoise"] = 1.0
                 calc_settings["deband"] = True
                 calc_settings["edge_clean"] = True
-                calc_settings["brightness"] = 0.040
-                calc_settings["gamma"] = 1.180
+                calc_settings["contrast"] = 1.080
+                calc_settings["saturation"] = 1.180
+                calc_settings["brightness"] = 0.005
+                calc_settings["gamma"] = 1.040
             elif orig_h <= 720:
                 problems.append(f"720p HD with mild line softness (Laplacian score: {lap_var:.0f})")
                 enhancements.append("Target 1080p remaster with AMD CAS 0.60 edge reconstruction & light cel deband")
@@ -692,14 +694,15 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
                 calc_settings["line_darken"] = 0.15
                 calc_settings["deband"] = True
             elif orig_h >= 1440:
-                problems.append(f"High Resolution master ({orig_w}x{orig_h}) - applying high-clarity edge sharpening & neural enhancement")
-                enhancements.append("Real-ESRGAN edge reconstruction + AMD CAS 0.85 line definition + deband smoothing")
+                problems.append(f"High Resolution master ({orig_w}x{orig_h}) - applying calibrated neural edge clarity & debanding")
+                enhancements.append("Real-ESRGAN edge reconstruction + AMD CAS 0.65 line definition + deband smoothing")
                 calc_settings["ai_model"] = "realesr-animevideov3"
-                calc_settings["sharpness"] = 0.85
-                calc_settings["line_darken"] = 0.25
+                calc_settings["sharpness"] = 0.65
+                calc_settings["contrast"] = 1.080
+                calc_settings["saturation"] = 1.160
                 calc_settings["deband"] = True
-                calc_settings["brightness"] = 0.035
-                calc_settings["gamma"] = 1.150
+                calc_settings["brightness"] = 0.004
+                calc_settings["gamma"] = 1.030
             else:
                 enhancements.append("AMD CAS 0.55 calibrated edge definition")
                 calc_settings["sharpness"] = 0.55
@@ -720,17 +723,21 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
             # 3. Dynamic Range & Multi-Scene Protection (SOLVES NIGHT VS MORNING DILEMMA)
             if is_mixed_dynamic_range:
                 problems.append(f"Mixed Dynamic Range: Timeline has both dark night scenes ({min_scene_luma:.1f} IRE) and bright morning/daylight scenes ({max_scene_luma:.1f} IRE)")
-                enhancements.append("Smart Scene Dynamic Range Protection active: raised shadow floor (+0.045) & open gamma (1.22) with S-curve rolloff — illuminates night scenes while stopping morning daylight burnout")
-                calc_settings["brightness"] = 0.045
-                calc_settings["gamma"] = 1.220
-                calc_settings["contrast"] = 1.040
+                enhancements.append("Smart Scene Dynamic Range Protection active: calibrated S-curve rolloff preserves deep inky blacks while stopping daylight burnout")
+                calc_settings["brightness"] = 0.004
+                calc_settings["gamma"] = 1.030
+                calc_settings["contrast"] = 1.080
+                calc_settings["saturation"] = 1.160
+                calc_settings["sharpness"] = 0.65
                 calc_settings["exposure"] = 0.0
             elif max_scene_luma < 55.0 or (p50 < 45 and mean_luma < 55):
                 problems.append(f"Uniform Low-Key / Night Scene Theme (Mean Luma: {mean_luma:.1f} IRE)")
-                enhancements.append("Illuminated shadow protection: lifted pedestal (+0.065) & open gamma (1.25) to clearly reveal dark backgrounds, outfits, and silhouettes")
-                calc_settings["brightness"] = 0.065
-                calc_settings["gamma"] = 1.250
-                calc_settings["contrast"] = 1.030
+                enhancements.append("Shadow protection enabled: inky blacks preserved with subtle shadow floor lift (+0.008) and calibrated contrast")
+                calc_settings["brightness"] = 0.008
+                calc_settings["gamma"] = 1.040
+                calc_settings["contrast"] = 1.060
+                calc_settings["saturation"] = 1.150
+                calc_settings["sharpness"] = 0.65
                 calc_settings["exposure"] = 0.0
             elif min_scene_luma > 105.0 or (p1 > 22 and p50 > 65):
                 problems.append(f"Elevated black floor / hazy telecine wash (Black level: {p1:.0f})")
@@ -768,8 +775,8 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
                 calc_settings["denoise"] = 2.5
                 calc_settings["deband"] = True
             else:
-                enhancements.append("Light debanding and micro-noise cleanup")
-                calc_settings["denoise"] = 2.0
+                enhancements.append("Pristine gradient debanding with cel line preservation")
+                calc_settings["denoise"] = 0.0
                 calc_settings["deband"] = True
 
             return {
@@ -908,11 +915,9 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
             if sample_src:
                 with Image.open(sample_src) as s_im:
                     stat = ImageStat.Stat(s_im.resize((64, 36)).convert("L"))
-                    # If mean luminance is low (night / low-key scene), lift pedestal & open gamma
-                    if stat.mean[0] < 65.0:
-                        brightness = max(brightness, 0.045)
-                        gamma = max(gamma, 1.220)
-                        contrast = min(contrast, 1.050)
+                    if stat.mean[0] < 45.0:
+                        brightness = max(brightness, 0.005)
+                        gamma = max(gamma, 1.040)
         except Exception:
             pass
 
@@ -997,10 +1002,9 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
         # and compresses morning daylight highlights (soft shoulder knee) to prevent blowout!
         smart_s_curve = settings.get("smart_dynamic_range", True)
         if smart_s_curve:
-            # Illuminated Dynamic S-Curve: Raised toe (0.065 = 16.5 IRE) ensures night shadows never crush to pitch black,
-            # near-black lift (0.15->0.22) illuminates character robes and dark scenery,
-            # shoulder rolloff (0.85->0.82) compresses morning daylight peaks to eliminate clipping!
-            chain.append("curves=all='0/0.065 0.15/0.22 0.35/0.42 0.65/0.68 0.85/0.82 1/0.96'")
+            # Calibrated Reference S-Curve: Inky deep blacks (0/0.008), smooth shadow preservation (0.12/0.14),
+            # neutral midtones (0.5/0.5), and soft shoulder highlight rolloff (0.88/0.86) to prevent clipping!
+            chain.append("curves=all='0/0.008 0.12/0.14 0.50/0.50 0.88/0.86 1/0.98'")
 
         eff_bright = brightness + (exposure * 0.05)
         eff_gamma = max(0.4, gamma + (exposure * 0.08))
@@ -1024,7 +1028,6 @@ float4 main(float2 tex : TEXCOORD0) : COLOR {
 
         if sharp > 0.05:
             chain.append(f"cas=strength={sharp:.2f}")
-            chain.append(f"unsharp=lx=5:ly=5:la={min(1.4, sharp * 0.85):.2f}:cx=5:cy=5:ca=0.0")
 
         if grain > 0.01 and not for_preview:
             chain.append(f"noise=alls={int(grain * 25)}:allf=t+u")
