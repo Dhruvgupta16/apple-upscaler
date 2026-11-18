@@ -305,6 +305,9 @@ class UniversalStudioBackend:
         if parent_dir and os.path.exists(parent_dir) and parent_dir != app_dir:
             candidate_dirs.append(parent_dir)
         for extra in [
+            os.path.join(parent_dir, "apple upscaler"),
+            os.path.join(app_dir, "apple upscaler"),
+            r"C:\Users\dhruv\Downloads\apple upscaler",
             os.path.join(parent_dir, "apple upscaler studio"),
             os.path.join(app_dir, "apple upscaler studio"),
             r"C:\Users\dhruv\Downloads\apple upscaler studio",
